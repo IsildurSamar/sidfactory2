@@ -52,7 +52,9 @@ release](https://img.shields.io/github/commits-since/chordian/sidfactory2/releas
 ### Build 20260308
 
 - Added: [#28](https://github.com/Chordian/sidfactory2/issues/28) ASID support!
-  Use real hardware that supports the ASID protocol (for example the TherapSID)
+  Use real hardware that supports the ASID protocol (for example the TherapSID
+  or [USBSID-Pico](https://github.com/LouDnl/USBSID-Pico). Press F1 in the
+  startup screen to select MIDI device to use for ASID.
 - Added: Config option `Playback.ASID.MidiInterface` to select the MIDI
   interface for ASID playback
 - Added [#190](https://github.com/Chordian/sidfactory2/issues/190)
