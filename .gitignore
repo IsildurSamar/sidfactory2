@@ -3,6 +3,9 @@
 .cache
 .svn
 .vs
+.cache
+.vscode
+*.code-workspace
 /builds
 /drivers
 /debug
@@ -37,3 +40,4 @@ xcuserdata
 .aider.*
 .exrc
 compile_commands.json
+tmp

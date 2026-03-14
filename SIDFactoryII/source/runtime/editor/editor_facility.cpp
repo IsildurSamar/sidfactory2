@@ -1,4 +1,5 @@
 #include "runtime/editor/editor_facility.h"
+#include "SDL_video.h"
 #include "foundation/graphics/textfield.h"
 #include "foundation/graphics/viewport.h"
 #include "foundation/input/keyboard.h"
@@ -27,9 +28,9 @@
 #include "runtime/editor/screens/screen_intro.h"
 #include "runtime/editor/utilities/editor_utils.h"
 #include "runtime/editor/utilities/import_utils.h"
+#include "runtime/emulation/asid/asid.h"
 #include "runtime/emulation/cpumemory.h"
 #include "runtime/emulation/cpumos6510.h"
-#include "runtime/emulation/asid/asid.h"
 #include "runtime/emulation/sid/sidproxy.h"
 #include "runtime/environmentdefines.h"
 #include "runtime/execution/executionhandler.h"
@@ -71,6 +72,7 @@ namespace Editor
 		, m_CurrentScreen(nullptr)
 		, m_RequestedScreen(nullptr)
 		, m_FlipOverlayState(false)
+		, m_IsFullScreen(false)
 		, m_SelectedColorScheme(0)
 	{
 		ConfigFile& config = Global::instance().GetConfig();
@@ -137,13 +139,13 @@ namespace Editor
 		m_AudioStream = new AudioStream(sid_sample_frequency, 16, std::max<const int>(audio_buffer_size, 0x80), m_ExecutionHandler);
 
 		// Setup midi out device, if default selected from the ini file
-		if(Global::instance().GetConfig().HasKey("Playback.ASID.MidiInterface"))
+		if (Global::instance().GetConfig().HasKey("Playback.ASID.MidiInterface"))
 		{
 			std::string config_asid_midi_port_name = GetSingleConfigurationValue<Utility::Config::ConfigValueString>(Global::instance().GetConfig(), "Playback.ASID.MidiInterface", std::string(""));
 			const auto midi_out_ports = RtMidiUtils::RtMidiOut_GetPorts(m_RtMidiOut);
 			const auto selected_out_port = RtMidiUtils::RtMidi_GetPortInfoByName(midi_out_ports, config_asid_midi_port_name);
 
-			if(selected_out_port.IsValid())
+			if (selected_out_port.IsValid())
 				RtMidiUtils::RtMidiOut_OpenPort(m_RtMidiOut, selected_out_port.Get());
 		}
 
@@ -157,6 +159,10 @@ namespace Editor
 		// Create overlay control
 		m_OverlayControl = std::make_unique<OverlayControl>(inViewport);
 
+		// Apply fullscreen setting
+		ConfigFile& configFile = Global::instance().GetConfig();
+		ApplyFullScreenSetting(GetSingleConfigurationValue<ConfigValueInt>(configFile, "Window.FullScreen", 0));
+
 		// Create screens
 		m_IntroScreen = std::make_unique<ScreenIntro>(
 			m_Viewport,
@@ -166,8 +172,10 @@ namespace Editor
 			m_KeyHookSetup.GetKeyHookStore(),
 			m_RtMidiOut,
 			m_DriverInfo,
-			[&]() { OnExitIntroScreen(); },
-			[&]() { OnExitIntroScreenToLoad(); });
+			[&]()
+			{ OnExitIntroScreen(); },
+			[&]()
+			{ OnExitIntroScreenToLoad(); });
 
 		m_DiskScreen = std::make_unique<ScreenDisk>(
 			&platform,
@@ -177,8 +185,10 @@ namespace Editor
 			m_DisplayState,
 			m_KeyHookSetup.GetKeyHookStore(),
 			config,
-			[&](const std::string& inFilenameSelection, FileType inSaveFileType) { OnFilenameSelection(m_DiskScreen.get(), inFilenameSelection, inSaveFileType); },
-			[&]() { OnCancelScreen(m_DiskScreen.get()); });
+			[&](const std::string& inFilenameSelection, FileType inSaveFileType)
+			{ OnFilenameSelection(m_DiskScreen.get(), inFilenameSelection, inSaveFileType); },
+			[&]()
+			{ OnCancelScreen(m_DiskScreen.get()); });
 
 		m_ConvertScreen = std::make_unique<ScreenConvert>(
 			m_Viewport,
@@ -187,8 +197,10 @@ namespace Editor
 			m_DisplayState,
 			m_KeyHookSetup.GetKeyHookStore(),
 			&platform,
-			[&]() { SetCurrentScreen(m_EditScreen.get()); },
-			[&](ScreenBase* inCallerScreen, const std::string& inPathAndFilename, std::shared_ptr<Utility::C64File> inConversionResult) { return OnConversionSuccess(inCallerScreen, inPathAndFilename, inConversionResult); });
+			[&]()
+			{ SetCurrentScreen(m_EditScreen.get()); },
+			[&](ScreenBase* inCallerScreen, const std::string& inPathAndFilename, std::shared_ptr<Utility::C64File> inConversionResult)
+			{ return OnConversionSuccess(inCallerScreen, inPathAndFilename, inConversionResult); });
 
 		// 	bool EditorFacility::OnConversionSuccess(ScreenBase* inCallerScreen, const std::string& inPathAndFilename, std::shared_ptr<Utility::C64File> inConversionResult)
 
@@ -204,15 +216,26 @@ namespace Editor
 			m_ExecutionHandler,
 			m_SIDProxy,
 			m_DriverInfo,
-			[&]() {	m_DiskScreen->SetMode(ScreenDisk::Load); RequestScreen(m_DiskScreen.get()); },
-			[&]() {	m_DiskScreen->SetMode(ScreenDisk::Save); m_DiskScreen->SetSuggestedFileName(m_LastSF2PathAndFilename);  RequestScreen(m_DiskScreen.get()); },
-			[&]() { m_DiskScreen->SetMode(ScreenDisk::Import); RequestScreen(m_DiskScreen.get()); },
-			[&]() {	m_DiskScreen->SetMode(ScreenDisk::LoadInstrument); RequestScreen(m_DiskScreen.get()); },
-			[&]() {	m_DiskScreen->SetMode(ScreenDisk::SaveInstrument); m_DiskScreen->SetSuggestedFileName(m_LastSF2PathAndFilename);  RequestScreen(m_DiskScreen.get()); },
-			[&]() { OnQuickSave(m_EditScreen.get()); },
-			[&](unsigned short inDestinationAddress, unsigned char inFirstZeroPage) { OnPack(m_EditScreen.get(), inDestinationAddress, inFirstZeroPage); },
-			[&]() { m_FlipOverlayState = true; },
-			[&](unsigned int inReconfigureOption) { Reconfigure(inReconfigureOption); });
+			[&]()
+			{	m_DiskScreen->SetMode(ScreenDisk::Load); RequestScreen(m_DiskScreen.get()); },
+			[&]()
+			{	m_DiskScreen->SetMode(ScreenDisk::Save); m_DiskScreen->SetSuggestedFileName(m_LastSF2PathAndFilename);  RequestScreen(m_DiskScreen.get()); },
+			[&]()
+			{ m_DiskScreen->SetMode(ScreenDisk::Import); RequestScreen(m_DiskScreen.get()); },
+			[&]()
+			{	m_DiskScreen->SetMode(ScreenDisk::LoadInstrument); RequestScreen(m_DiskScreen.get()); },
+			[&]()
+			{	m_DiskScreen->SetMode(ScreenDisk::SaveInstrument); m_DiskScreen->SetSuggestedFileName(m_LastSF2PathAndFilename);  RequestScreen(m_DiskScreen.get()); },
+			[&]()
+			{ OnQuickSave(m_EditScreen.get()); },
+			[&](unsigned short inDestinationAddress, unsigned char inFirstZeroPage)
+			{ OnPack(m_EditScreen.get(), inDestinationAddress, inFirstZeroPage); },
+			[&]()
+			{ m_FlipOverlayState = true; },
+			[&]()
+			{ ToggleFullScreen(); },
+			[&](unsigned int inReconfigureOption)
+			{ Reconfigure(inReconfigureOption); });
 
 		//
 		// Apply additional configuration to the edit screen
@@ -246,7 +269,8 @@ namespace Editor
 		IPlatform& platform = Global::instance().GetPlatform();
 		ConfigFile& configFile = Global::instance().GetConfig();
 
-		const bool file_loaded_successfully = [&]() {
+		const bool file_loaded_successfully = [&]()
+		{
 			if (inFileToLoad != nullptr)
 			{
 				std::string file_to_load(inFileToLoad);
@@ -363,10 +387,10 @@ namespace Editor
 	{
 		if (m_CurrentScreen != nullptr)
 		{
-			m_CurrentScreen->TryQuit([&](bool inQuit) {
+			m_CurrentScreen->TryQuit([&](bool inQuit)
+				{
 				if (inQuit)
-					m_IsDone = true;
-			});
+					m_IsDone = true; });
 		}
 	}
 
@@ -374,12 +398,12 @@ namespace Editor
 	{
 		if (m_CurrentScreen != nullptr)
 		{
-			m_CurrentScreen->TryLoad(inPathAndFilename, [&, path_and_filename = inPathAndFilename](bool inQuit) {
+			m_CurrentScreen->TryLoad(inPathAndFilename, [&, path_and_filename = inPathAndFilename](bool inQuit)
+				{
 				if (LoadFile(path_and_filename))
 					ForceRequestScreen(m_EditScreen.get());
 				else
-					m_CurrentScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Invalid file", "The selected file is not compatible with SID Factory II.", DefaultDialogWidth, true, []() {}));
-			});
+					m_CurrentScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Invalid file", "The selected file is not compatible with SID Factory II.", DefaultDialogWidth, true, []() {})); });
 		}
 	}
 
@@ -456,6 +480,29 @@ namespace Editor
 
 			m_FlipOverlayState = false;
 		}
+	}
+
+	void EditorFacility::ApplyFullScreenSetting(bool isFullScreen)
+	{
+
+		// Notify overlay control about fullscreen state change
+		if (m_OverlayControl != nullptr)
+		{
+			m_OverlayControl->SetFullScreenState(isFullScreen);
+		}
+
+		m_IsFullScreen = isFullScreen;
+		m_Viewport->SetWindowFullScreen(m_IsFullScreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+
+		if (m_OverlayControl != nullptr)
+		{
+			m_OverlayControl->OnWindowResized();
+		}
+	}
+
+	void EditorFacility::ToggleFullScreen()
+	{
+		ApplyFullScreenSetting(!m_IsFullScreen);
 	}
 
 
@@ -631,7 +678,8 @@ namespace Editor
 		void* data = nullptr;
 		long data_size = 0;
 
-		auto on_successfull_conversion = [this, inPathAndFilename, inCallerScreen, inSuccesfullConversionAction](std::shared_ptr<Utility::C64File> inC64File) {
+		auto on_successfull_conversion = [this, inPathAndFilename, inCallerScreen, inSuccesfullConversionAction](std::shared_ptr<Utility::C64File> inC64File)
+		{
 			std::shared_ptr<DriverInfo> driver_info = std::make_shared<DriverInfo>();
 
 			if (inC64File != nullptr)
@@ -675,7 +723,7 @@ namespace Editor
 				}
 			}
 
-			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Conversion failed", "The selected file couldn't be converted correctly.", DefaultDialogWidth, true, []() {}));
+			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Conversion failed", "The selected file couldn't be converted correctly.", DefaultDialogWidth, true, []() { }));
 		};
 
 		if (Utility::ReadFile(inPathAndFilename, max_file_size, &data, data_size))
@@ -770,7 +818,8 @@ namespace Editor
 	{
 		if (m_PackedData != nullptr)
 		{
-			auto do_save = [&, inFileName](std::string inTitle, std::string inAuthor, std::string inCopyright) {
+			auto do_save = [&, inFileName](std::string inTitle, std::string inAuthor, std::string inCopyright)
+			{
 				unsigned short top_of_file_address = m_PackedData->GetTopAddress();
 				unsigned short data_size = static_cast<unsigned short>(m_PackedData->GetDataSize());
 
@@ -810,7 +859,7 @@ namespace Editor
 				RequestScreen(m_EditScreen.get());
 			};
 
-			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogSIDFileInfo>(do_save, []() {}));
+			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogSIDFileInfo>(do_save, []() { }));
 
 			return true;
 		}
@@ -826,7 +875,7 @@ namespace Editor
 			if (m_DriverInfo->IsValid())
 				RequestScreen(m_EditScreen.get());
 			else
-				inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("No driver loaded", "Cannot enter the editor when no driver has been loaded. Please load a valid file from the file selection screen!", DefaultDialogWidth, true, []() {}));
+				inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("No driver loaded", "Cannot enter the editor when no driver has been loaded. Please load a valid file from the file selection screen!", DefaultDialogWidth, true, []() { }));
 		}
 	}
 
@@ -947,7 +996,7 @@ namespace Editor
 			}
 		}
 
-		inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Conversion failed", "The selected file couldn't be converted correctly.", DefaultDialogWidth, true, []() {}));
+		inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Conversion failed", "The selected file couldn't be converted correctly.", DefaultDialogWidth, true, []() { }));
 
 		return false;
 	}
@@ -965,10 +1014,10 @@ namespace Editor
 		packing_info += "Size : 0x" + EditorUtils::ConvertToHexValue(static_cast<unsigned short>(m_PackedData->GetDataSize()), is_uppercase);
 
 		inCallerScreen->GetComponentsManager().StartDialog(
-			std::make_shared<DialogMessage>("Packing results", packing_info, 30, false, [&]() {
+			std::make_shared<DialogMessage>("Packing results", packing_info, 30, false, [&]()
+				{
 				m_DiskScreen->SetMode(ScreenDisk::Mode::SavePacked);
-				SetCurrentScreen(m_DiskScreen.get());
-			}));
+				SetCurrentScreen(m_DiskScreen.get()); }));
 	}
 
 
@@ -980,7 +1029,7 @@ namespace Editor
 
 	void EditorFacility::OnSaveError(ScreenBase* inCallerScreen)
 	{
-		inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Error", "The file could not be saved to the current destination!", DefaultDialogWidth, true, []() {}));
+		inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Error", "The file could not be saved to the current destination!", DefaultDialogWidth, true, []() { }));
 	}
 
 	//-------------------------------------------------------------------------------------------------------------------------
@@ -988,11 +1037,13 @@ namespace Editor
 
 	void EditorFacility::DoLoad(ScreenBase* inCallerScreen, const std::string& inSelectedFilename)
 	{
-		auto on_success = [this]() {
+		auto on_success = [this]()
+		{
 			RequestScreen(m_EditScreen.get());
 		};
 
-		auto do_load = [this, on_success, inSelectedFilename, inCallerScreen]() {
+		auto do_load = [this, on_success, inSelectedFilename, inCallerScreen]()
+		{
 			if (LoadFile(inSelectedFilename))
 				on_success();
 			else
@@ -1000,12 +1051,12 @@ namespace Editor
 				if (LoadAndConvertFile(inSelectedFilename, inCallerScreen, on_success))
 					return;
 
-				inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Invalid file", "The selected file is not compatible with SID Factory II.", DefaultDialogWidth, true, []() {}));
+				inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Invalid file", "The selected file is not compatible with SID Factory II.", DefaultDialogWidth, true, []() { }));
 			}
 		};
 
 		if (m_DriverInfo->IsValid())
-			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessageYesNo>("Load file", "Are you sure you want to load:\n" + inSelectedFilename + "? \nAny unsaved changes will be lost!", DefaultDialogWidth, do_load, []() {}));
+			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessageYesNo>("Load file", "Are you sure you want to load:\n" + inSelectedFilename + "? \nAny unsaved changes will be lost!", DefaultDialogWidth, do_load, []() { }));
 		else
 			do_load();
 	}
@@ -1024,18 +1075,19 @@ namespace Editor
 		}
 		else if (IsFileSF2(save_path_and_filename.string()))
 		{
-			auto do_save = [save_path_and_filename, inCallerScreen, this]() {
+			auto do_save = [save_path_and_filename, inCallerScreen, this]()
+			{
 				if (SaveFile(save_path_and_filename.string()))
 					this->RequestScreen(this->m_EditScreen.get());
 				else
 					OnSaveError(inCallerScreen);
 			};
 
-			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessageYesNo>("Warning", inSelectedFilename + "\nAlready exists! Are you sure you want to overwrite it?", DefaultDialogWidth, do_save, []() {}));
+			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessageYesNo>("Warning", inSelectedFilename + "\nAlready exists! Are you sure you want to overwrite it?", DefaultDialogWidth, do_save, []() { }));
 		}
 		else
 		{
-			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Illegal save destination", "You are trying to overwrite a file, which cannot be identified as belonging to SID Factory II.\nPlease choose another name!", DefaultDialogWidth, true, []() {}));
+			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Illegal save destination", "You are trying to overwrite a file, which cannot be identified as belonging to SID Factory II.\nPlease choose another name!", DefaultDialogWidth, true, []() { }));
 		}
 	}
 
@@ -1059,16 +1111,17 @@ namespace Editor
 		const bool sf2_extension = save_path_and_filename.extension().string() == ".sf2";
 
 		if (!exists(save_path_and_filename))
-			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Illegal save destination", "The quick save file does not exist!", DefaultDialogWidth, true, []() {}));
+			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Illegal save destination", "The quick save file does not exist!", DefaultDialogWidth, true, []() { }));
 		else if (!IsFileSF2(save_path_and_filename.string()))
-			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Illegal save destination", "You are trying to quick save to a file, which cannot be identified as belonging to SID Factory II.\nPlease save through the save disk menu!", DefaultDialogWidth, true, []() {}));
+			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Illegal save destination", "You are trying to quick save to a file, which cannot be identified as belonging to SID Factory II.\nPlease save through the save disk menu!", DefaultDialogWidth, true, []() { }));
 		else if (!sf2_extension)
-			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Illegal save destination", "You are trying to quick save to a file, with an extension other than .sf2.\nPlease save through the save disk menu!", DefaultDialogWidth, true, []() {}));
+			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Illegal save destination", "You are trying to quick save to a file, with an extension other than .sf2.\nPlease save through the save disk menu!", DefaultDialogWidth, true, []() { }));
 		else
 		{
 			const bool confirm_quick_save = GetSingleConfigurationValue<ConfigValueInt>(Global::instance().GetConfig(), "Editor.Confirm.QuickSave", 1) != 0;
 
-			auto do_save = [save_path_and_filename, inCallerScreen, this]() {
+			auto do_save = [save_path_and_filename, inCallerScreen, this]()
+			{
 				if (SaveFile(save_path_and_filename.string()))
 					this->m_EditScreen->SetStatusBarMessage(" Quick saved to: " + save_path_and_filename.filename().string(), 5000);
 				else
@@ -1077,7 +1130,7 @@ namespace Editor
 
 			if (confirm_quick_save)
 			{
-				inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessageYesNo>("Warning", "Do you want to perform a quick save to:\n" + save_path_and_filename.string() + "?", DefaultDialogWidth, do_save, []() {}));
+				inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessageYesNo>("Warning", "Do you want to perform a quick save to:\n" + save_path_and_filename.string() + "?", DefaultDialogWidth, do_save, []() { }));
 			}
 			else
 			{
@@ -1089,7 +1142,8 @@ namespace Editor
 
 	void EditorFacility::DoImport(ScreenBase* inCallerScreen, const std::string& inSelectedFilename)
 	{
-		auto do_load = [&, inSelectedFilename, inCallerScreen]() {
+		auto do_load = [&, inSelectedFilename, inCallerScreen]()
+		{
 			std::shared_ptr<DriverInfo> import_driver_info = nullptr;
 			std::shared_ptr<Utility::C64File> import_c64_file = nullptr;
 
@@ -1099,9 +1153,9 @@ namespace Editor
 				const bool valid_music_data = import_driver_info->HasParsedHeaderBlock(DriverInfo::HeaderBlockID::ID_MusicData);
 
 				if (!valid_music_data)
-					inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Import failure", "Unable to import music data!", DefaultDialogWidth, true, []() {}));
+					inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Import failure", "Unable to import music data!", DefaultDialogWidth, true, []() { }));
 				else if (!valid_tables)
-					inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Import failure", "Unable to import table definitions!", DefaultDialogWidth, true, []() {}));
+					inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Import failure", "Unable to import table definitions!", DefaultDialogWidth, true, []() { }));
 				else
 				{
 					ImportUtils::Import(inCallerScreen, *m_DriverInfo, *m_CPUMemory, *import_driver_info, *import_c64_file);
@@ -1109,10 +1163,10 @@ namespace Editor
 				}
 			}
 			else
-				inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Invalid file", "The selected file is not compatible with SID Factory II import.", DefaultDialogWidth, true, []() {}));
+				inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessage>("Invalid file", "The selected file is not compatible with SID Factory II import.", DefaultDialogWidth, true, []() { }));
 		};
 
-		inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessageYesNo>("Import song data", "Are you sure you want to import the song data from\n" + inSelectedFilename + "?\nAny unsaved changes will be lost!", DefaultDialogWidth, do_load, []() {}));
+		inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessageYesNo>("Import song data", "Are you sure you want to import the song data from\n" + inSelectedFilename + "?\nAny unsaved changes will be lost!", DefaultDialogWidth, do_load, []() { }));
 	}
 
 
@@ -1127,12 +1181,13 @@ namespace Editor
 		}
 		else
 		{
-			auto do_save = [save_path_and_filename, this]() {
+			auto do_save = [save_path_and_filename, this]()
+			{
 				SavePackedFile(save_path_and_filename.string());
 				this->RequestScreen(this->m_EditScreen.get());
 			};
 
-			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessageYesNo>("Warning", inSelectedFilename + "\nAlready exists! Are you sure you want to overwrite it?", DefaultDialogWidth, do_save, []() {}));
+			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessageYesNo>("Warning", inSelectedFilename + "\nAlready exists! Are you sure you want to overwrite it?", DefaultDialogWidth, do_save, []() { }));
 		}
 	}
 
@@ -1147,11 +1202,12 @@ namespace Editor
 		}
 		else
 		{
-			auto do_save = [inCallerScreen, save_path_and_filename, this]() {
+			auto do_save = [inCallerScreen, save_path_and_filename, this]()
+			{
 				SavePackedFileToSID(inCallerScreen, save_path_and_filename.string());
 			};
 
-			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessageYesNo>("Warning", inSelectedFilename + "\nAlready exists! Are you sure you want to overwrite it?", DefaultDialogWidth, do_save, []() {}));
+			inCallerScreen->GetComponentsManager().StartDialog(std::make_shared<DialogMessageYesNo>("Warning", inSelectedFilename + "\nAlready exists! Are you sure you want to overwrite it?", DefaultDialogWidth, do_save, []() { }));
 		}
 	}
 

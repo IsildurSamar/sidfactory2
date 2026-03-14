@@ -7,6 +7,7 @@
 #include "runtime/editor/driver/driver_info.h"
 #include "utils/configfile.h"
 #include "utils/global.h"
+#include "utils/logging.h"
 #include "utils/utilities.h"
 
 #include <algorithm>
@@ -21,6 +22,7 @@ namespace Editor
 
 	OverlayControl::OverlayControl(Foundation::Viewport* inViewport)
 		: m_OverlayEnabledState(false)
+		, m_IsFullScreen(false)
 
 		, m_Viewport(inViewport)
 		, m_IsFading(true)
@@ -54,16 +56,23 @@ namespace Editor
 
 					if (m_Enabled)
 					{
-						m_Viewport->SetWindowSize({ m_OverlayWidth, m_OverlayHeight });
-						m_Viewport->SetWindowPosition(window_position - editor_client_offset);
+						if (!m_IsFullScreen)
+						{
+							m_Viewport->SetWindowSize({ m_OverlayWidth, m_OverlayHeight });
+							m_Viewport->SetWindowPosition(window_position - editor_client_offset);
+						}
 					}
 					else
 					{
-						m_Viewport->SetWindowSize({ m_Viewport->GetClientWidth(), m_Viewport->GetClientHeight() });
-						m_Viewport->SetWindowPosition(window_position + editor_client_offset);
+						if (!m_IsFullScreen)
+						{
+							m_Viewport->SetWindowSize({ m_Viewport->GetClientWidth(), m_Viewport->GetClientHeight() });
+							m_Viewport->SetWindowPosition(window_position + editor_client_offset);
+						}
 					}
 
 					m_OverlayEnabledState = m_Enabled;
+					OnWindowResized();
 				}
 			}
 			else
@@ -94,6 +103,11 @@ namespace Editor
 		return m_Enabled;
 	}
 
+	void OverlayControl::SetFullScreenState(bool inIsFullScreen)
+	{
+		m_IsFullScreen = inIsFullScreen;
+	}
+
 
 	void OverlayControl::OnChange(const DriverInfo& inDriverInfo)
 	{
@@ -118,7 +132,7 @@ namespace Editor
 				return "";
 			};
 
-			std::string version_base = VersionPrefix() + std::to_string(major_version) + "_"; 
+			std::string version_base = VersionPrefix() + std::to_string(major_version) + "_";
 
 			for (int minor = static_cast<int>(minor_version); minor >= 0; --minor)
 			{
@@ -141,17 +155,21 @@ namespace Editor
 
 	void OverlayControl::OnWindowResized()
 	{
+
 		if (m_Enabled)
 		{
 			const Foundation::Point editor_client_offset = { m_OverlayEditorClientOffsetX, m_OverlayEditorClientOffsetY };
 			m_Viewport->SetClientPositionInWindow(editor_client_offset);
+			m_Viewport->SetWindowSize({ m_OverlayWidth, m_OverlayHeight });
 		}
 		else
+		{
 			m_Viewport->SetClientPositionInWindow({ 0, 0 });
+			m_Viewport->SetWindowSize({ m_Viewport->GetClientWidth(), m_Viewport->GetClientHeight() });
+		}
 
 		m_Viewport->ShowOverlay(m_Enabled);
 	}
-
 
 
 	void OverlayControl::ReadConfigValues(const Utility::ConfigFile& inConfigFile)

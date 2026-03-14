@@ -7,7 +7,6 @@
 #include "foundation/base/types.h"
 #include "foundation/graphics/color.h"
 #include "resources/data_char.h"
-#include "utils/bit_array.h"
 
 namespace Foundation
 {
@@ -35,12 +34,15 @@ namespace Foundation
 
 		Extent GetWindowSize() const;
 		void SetWindowSize(const Extent& inSize);
+		void SetLogicalSize(const Extent& inSize);
 
 		void SetFadeValue(float inFadeValue);
 		void SetAdditionTitleInfo(const std::string& inAdditionTitleInfo);
 
 		void ShowOverlay(bool inShowOverlay);
 		void SetOverlayPNG(int inIndex, void* inData, const Rect& inImageRect);
+		void SetWindowFullScreen(int flags);
+		bool IsFullScreen() const;
 
 		void Begin();
 		void End();
@@ -50,11 +52,14 @@ namespace Foundation
 		Image* CreateImageFromFile(const std::string& inFileName);
 		Image* CreateImageFromARGBData(void* inData, unsigned int inWidth, unsigned int inHeight, bool inIncludeAlphaChannel);
 
+		SDL_Renderer* GetRenderer();
+
 		void Destroy(IManaged* inManagedResource);
 
 		void SetUserColor(unsigned char inUserColorIndex, unsigned int inARGB);
 		const Palette& GetPalette() const;
 		const Resource::Font& GetFont() const;
+
 
 	private:
 		struct Overlay

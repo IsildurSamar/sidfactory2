@@ -1,15 +1,15 @@
 #include "foundation/graphics/viewport.h"
+#include "SDL_video.h"
 #include "foundation/base/assert.h"
 #include "foundation/base/types.h"
 #include "foundation/graphics/drawfield.h"
 #include "foundation/graphics/image.h"
 #include "foundation/graphics/imanaged.h"
 #include "foundation/graphics/textfield.h"
-#include "resources/data_char.h"
 #include "utils/config/configtypes.h"
 #include "utils/configfile.h"
 #include "utils/global.h"
-#include <iostream>
+#include "utils/logging.h"
 
 using namespace Utility;
 using namespace Utility::Config;
@@ -33,10 +33,12 @@ namespace Foundation
 		ConfigFile& config = Global::instance().GetConfig();
 		std::string font = GetSingleConfigurationValue<ConfigValueString>(config, "Window.Font", std::string("DEFAULT"));
 
-		if (font == "C64") {
+		if (font == "C64")
+		{
 			m_Font = Resource::C64;
 		}
-		else {
+		else
+		{
 			m_Font = Resource::DEFAULT;
 		}
 
@@ -112,7 +114,8 @@ namespace Foundation
 
 	void Viewport::SetWindowPosition(const Point& inPosition)
 	{
-		SDL_SetWindowPosition(m_Window, inPosition.m_X, inPosition.m_Y);
+		if (!IsFullScreen())
+			SDL_SetWindowPosition(m_Window, inPosition.m_X, inPosition.m_Y);
 	}
 
 
@@ -126,10 +129,20 @@ namespace Foundation
 
 	void Viewport::SetWindowSize(const Extent& inSize)
 	{
-		const int window_width = static_cast<int>(inSize.m_Width * m_Scaling);
-		const int window_height = static_cast<int>(inSize.m_Height * m_Scaling);
+		if (!IsFullScreen())
+		{
+			const int window_width = static_cast<int>(inSize.m_Width * m_Scaling);
+			const int window_height = static_cast<int>(inSize.m_Height * m_Scaling);
 
-		SDL_SetWindowSize(m_Window, window_width, window_height);
+			SDL_SetWindowSize(m_Window, window_width, window_height);
+		}
+
+		SDL_RenderSetLogicalSize(m_Renderer, inSize.m_Width, inSize.m_Height);
+	}
+
+
+	void Viewport::SetLogicalSize(const Extent& inSize)
+	{
 		SDL_RenderSetLogicalSize(m_Renderer, inSize.m_Width, inSize.m_Height);
 	}
 
@@ -185,13 +198,28 @@ namespace Foundation
 	}
 
 
+	void Viewport::SetWindowFullScreen(int flags)
+	{
+		SDL_SetWindowFullscreen(m_Window, flags);
+	}
+
+	bool Viewport::IsFullScreen() const
+	{
+		Uint32 flags = SDL_GetWindowFlags(m_Window);
+		bool is_fullscreen = (flags & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP)) != 0;
+		return is_fullscreen;
+	}
+
+	SDL_Renderer* Viewport::GetRenderer()
+	{
+		return m_Renderer;
+	}
+
+
 	void Viewport::Begin()
 	{
 		if (m_RenderTarget != nullptr)
 			SDL_SetRenderTarget(m_Renderer, m_RenderTarget);
-
-		SDL_SetRenderDrawColor(m_Renderer, 0, 0, 0, 255);
-		SDL_RenderClear(m_Renderer);
 
 		for (auto text_field : m_ManagedResources)
 			text_field->Begin();
@@ -206,6 +234,8 @@ namespace Foundation
 		if (m_RenderTarget != nullptr)
 		{
 			SDL_SetRenderTarget(m_Renderer, nullptr);
+			SDL_SetRenderDrawColor(m_Renderer, 0, 0, 0, 255);
+			SDL_RenderClear(m_Renderer);
 
 			if (m_ShowOverlay)
 			{
