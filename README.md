@@ -45,9 +45,11 @@ binaries](https://github.com/Chordian/sidfactory2/workflows/Build%20macOS%20bina
 Please report issues in our [issue tracker](https://github.com/Chordian/sidfactory2/issues).
 
 ![Commits since last
-release](https://img.shields.io/github/commits-since/chordian/sidfactory2/release-20260308)
+release](https://img.shields.io/github/commits-since/chordian/sidfactory2/release-20260314)
 
 ### Next release
+
+### Build 20260314
 
 - Added: [#183](https://github.com/Chordian/sidfactory2/issues/183) Toggle
   fullscreen with ALT-Enter. When in fullscreen, switching overlay on/off is
