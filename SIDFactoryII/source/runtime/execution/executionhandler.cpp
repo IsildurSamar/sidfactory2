@@ -527,8 +527,10 @@ namespace Emulation
 						m_PostUpdateCallback(m_Memory);
 				}
 
-				// Fast-forward (seeking) is applied within the first sub-frame only
-				if (sub == 0 && !error)
+				// Fast-forward (seeking) is applied within the first sub-frame only,
+				// and is fully disabled while multispeed is active so the two mechanisms
+				// never contend for the frame's CPU-cycle budget.
+				if (multiplier == 1 && sub == 0 && !error)
 				{
 					for (unsigned int i = 0; i < m_FastForwardUpdateCount; ++i)
 					{
