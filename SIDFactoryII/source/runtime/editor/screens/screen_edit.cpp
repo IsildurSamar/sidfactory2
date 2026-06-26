@@ -1352,16 +1352,10 @@ namespace Editor
 			// Create data source
 			std::shared_ptr<DataSourceTable> table_data_source = DriverUtils::CreateTableDataSource(table_definition, m_CPUMemory);
 
-			// Apply multispeed tempo scaling
+			// Multispeed leaves the Tempo table untouched (manual tempo entry by the user).
+			// Keep a reference for possible future use, but do not auto-scale it.
 			if (table_definition.m_Name == "Tempo")
-			{
 				m_TempoTableDataSource = table_data_source;
-				table_data_source->SetScaleMultiplier(m_ExecutionHandler->GetMultiSpeedMultiplier());
-
-				m_CPUMemory->Lock();
-				table_data_source->PushDataToSource();
-				m_CPUMemory->Unlock();
-			}
 
 			// Create table
 			std::shared_ptr<ComponentTableRowElements> table = [&]() -> std::shared_ptr<ComponentTableRowElements>
@@ -2285,16 +2279,9 @@ namespace Editor
 
 	void ScreenEdit::SetMultiSpeed(int inMultiplier)
 	{
+		// Multispeed only controls how many times the player runs per real frame.
+		// Tempo compensation is manual: the user scales the Tempo-table value by N.
 		m_ExecutionHandler->SetMultiSpeedMultiplier(inMultiplier);
-
-		if (m_TempoTableDataSource != nullptr)
-		{
-			m_TempoTableDataSource->SetScaleMultiplier(inMultiplier);
-			m_CPUMemory->Lock();
-			m_TempoTableDataSource->PushDataToSource();
-			m_CPUMemory->Unlock();
-		}
-
 		SetStatusBarMessage(" Speed: " + std::to_string(inMultiplier) + "x", 1500);
 	}
 }

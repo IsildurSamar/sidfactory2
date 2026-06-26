@@ -86,7 +86,6 @@ namespace Emulation
 		void SetInitVector(unsigned short inVector);
 		void SetStopVector(unsigned short inVector);
 		void SetUpdateVector(unsigned short inVector);
-		void SetTempoCounterAddress(unsigned short inAddress);
 		void SetPostUpdateCallback(const std::function<void(CPUMemory*)>& inPostUpdateCallback);
 
 		// Cycles
@@ -177,7 +176,6 @@ namespace Emulation
 		unsigned short m_InitVector;
 		unsigned short m_StopVector;
 		unsigned short m_UpdateVector;
-		unsigned short m_TempoCounterAddress;
 
 		// SID and CPU
 		SIDProxy* m_SIDProxy;

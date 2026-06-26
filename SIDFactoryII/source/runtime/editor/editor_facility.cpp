@@ -603,7 +603,6 @@ namespace Editor
 				m_ExecutionHandler->SetInitVector(m_DriverInfo->GetDriverCommon().m_InitAddress);
 				m_ExecutionHandler->SetStopVector(m_DriverInfo->GetDriverCommon().m_StopAddress);
 				m_ExecutionHandler->SetUpdateVector(m_DriverInfo->GetDriverCommon().m_UpdateAddress);
-				m_ExecutionHandler->SetTempoCounterAddress(m_DriverInfo->GetDriverCommon().m_TempoCounterAddress);
 
 				// Give the first song a default name, if it hasn't one and is the only song in the loaded file
 				EditorUtils::UpdateSongNameOfSingleSongPackages(*m_DriverInfo);
@@ -702,7 +701,6 @@ namespace Editor
 					m_ExecutionHandler->SetInitVector(m_DriverInfo->GetDriverCommon().m_InitAddress);
 					m_ExecutionHandler->SetStopVector(m_DriverInfo->GetDriverCommon().m_StopAddress);
 					m_ExecutionHandler->SetUpdateVector(m_DriverInfo->GetDriverCommon().m_UpdateAddress);
-					m_ExecutionHandler->SetTempoCounterAddress(m_DriverInfo->GetDriverCommon().m_TempoCounterAddress);
 
 					// Give the first song a default name, if it hasn't one and is the only song in the loaded file
 					EditorUtils::UpdateSongNameOfSingleSongPackages(*m_DriverInfo);
@@ -981,7 +979,6 @@ namespace Editor
 				m_ExecutionHandler->SetInitVector(m_DriverInfo->GetDriverCommon().m_InitAddress);
 				m_ExecutionHandler->SetStopVector(m_DriverInfo->GetDriverCommon().m_StopAddress);
 				m_ExecutionHandler->SetUpdateVector(m_DriverInfo->GetDriverCommon().m_UpdateAddress);
-				m_ExecutionHandler->SetTempoCounterAddress(m_DriverInfo->GetDriverCommon().m_TempoCounterAddress);
 
 				// Store name of last read file
 				SetLastSavedPathAndFilename(inPathAndFilename);
