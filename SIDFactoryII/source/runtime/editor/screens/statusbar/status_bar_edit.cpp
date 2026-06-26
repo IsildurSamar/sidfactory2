@@ -22,13 +22,15 @@ namespace Editor
 			std::function<void(Mouse::Button, int)> inSIDMousePressCallback,
 			std::function<void(Mouse::Button, int)> inOutputDevicePressCallback,
 			std::function<void(Mouse::Button, int)> inContextHighlightMousePressCallback,
-			std::function<void(Mouse::Button, int)> inFollowPlayerMousePressCallback
+			std::function<void(Mouse::Button, int)> inFollowPlayerMousePressCallback,
+			std::function<void(Mouse::Button, int)> inMultiSpeedMousePressCallback
 	)
 		: StatusBar(inTextField)
 		, m_EditState(inEditState)
 		, m_DriverState(inDriverState)
 		, m_AuxilaryDataPlayMarkers(inAuxilaryDataCollection)
 		, m_ExecutionHandler(inExecutionHandler)
+		, m_CachedMultiSpeed(-1)
 	{
 		m_TextSectionOctave = std::make_shared<TextSection>(12, inOctaveMousePressCallback);
 		m_TextSectionSharpFlat = std::make_shared<TextSection>(15, inSharpFlatMousePressCallback);
@@ -36,6 +38,7 @@ namespace Editor
 		m_TextSectionContextHighlight = std::make_shared<TextSection>(18, inContextHighlightMousePressCallback);
 		m_TextSectionFollowPlay = std::make_shared<TextSection>(15, inFollowPlayerMousePressCallback);
 		m_TextSectionOutputDevice = std::make_shared<TextSection>(17, inOutputDevicePressCallback);
+		m_TextSectionMultiSpeed = std::make_shared<TextSection>(8, inMultiSpeedMousePressCallback);
 
 		m_TextSectionList.push_back(m_TextSectionOctave);
 		m_TextSectionList.push_back(m_TextSectionSharpFlat);
@@ -43,6 +46,7 @@ namespace Editor
 		m_TextSectionList.push_back(m_TextSectionContextHighlight);
 		m_TextSectionList.push_back(m_TextSectionFollowPlay);
 		m_TextSectionList.push_back(m_TextSectionOutputDevice);
+		m_TextSectionList.push_back(m_TextSectionMultiSpeed);
 	}
 
 	
@@ -91,6 +95,14 @@ namespace Editor
 			std::string output_device_string = (outputDevice == Emulation::ExecutionHandler::OutputDevice::ASID ? "ASID" : "RESID");
 			m_TextSectionOutputDevice->SetText("Output: " + output_device_string);
 			m_CachedOutputDevice = outputDevice;
+			m_NeedRefresh = true;
+		}
+
+		const int multi_speed = m_ExecutionHandler.GetMultiSpeedMultiplier();
+		if (multi_speed != m_CachedMultiSpeed || inNeedUpdate)
+		{
+			m_TextSectionMultiSpeed->SetText("Spd:" + std::to_string(multi_speed) + "x");
+			m_CachedMultiSpeed = multi_speed;
 			m_NeedRefresh = true;
 		}
 

@@ -75,6 +75,10 @@ namespace Editor
 			{
 				unsigned int read_index = column * m_RowCount + row;
 				unsigned char data = m_RawDataBuffer[read_index];
+
+				if (m_ScaleMultiplier > 1 && data > 0 && data < 0x80)
+					data = static_cast<unsigned char>(static_cast<int>(data) / m_ScaleMultiplier);
+
 				m_Data[i] = data;
 
 				++i;

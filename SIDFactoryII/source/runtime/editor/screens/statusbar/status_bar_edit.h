@@ -34,7 +34,8 @@ namespace Editor
 			std::function<void(Foundation::Mouse::Button, int)> inSIDMousePressCallback,
 			std::function<void(Foundation::Mouse::Button, int)> inOuputDevicePressCallback,
 			std::function<void(Foundation::Mouse::Button, int)> inContextHighlightMousePressCallback,
-			std::function<void(Foundation::Mouse::Button, int)> inFollowPlayerMousePressCallback
+			std::function<void(Foundation::Mouse::Button, int)> inFollowPlayerMousePressCallback,
+			std::function<void(Foundation::Mouse::Button, int)> inMultiSpeedMousePressCallback
 		);
 
 		~StatusBarEdit();
@@ -52,6 +53,7 @@ namespace Editor
 		std::shared_ptr<TextSection> m_TextSectionContextHighlight;
 		std::shared_ptr<TextSection> m_TextSectionFollowPlay;
 		std::shared_ptr<TextSection> m_TextSectionOutputDevice;
+		std::shared_ptr<TextSection> m_TextSectionMultiSpeed;
 
 		const EditState& m_EditState;
 		const AuxilaryDataCollection& m_AuxilaryDataPlayMarkers;
@@ -64,6 +66,7 @@ namespace Editor
 		AuxilaryDataEditingPreferences::NotationMode m_CachedNotationMode;
 		AuxilaryDataHardwarePreferences::SIDModel m_CachedSIDModel;
 		AuxilaryDataHardwarePreferences::Region m_CachedRegion;
-		Emulation::ExecutionHandler::OutputDevice m_CachedOutputDevice; 
+		Emulation::ExecutionHandler::OutputDevice m_CachedOutputDevice;
+		int m_CachedMultiSpeed; 
 	};
 }

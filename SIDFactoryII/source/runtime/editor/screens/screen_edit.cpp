@@ -215,6 +215,22 @@ namespace Editor
 			DoToggleFollowPlay();
 		};
 
+		auto mouse_button_multispeed = [&](Foundation::Mouse::Button inMouseButton, int inKeyboardModifiers)
+		{
+			int speed = m_ExecutionHandler->GetMultiSpeedMultiplier();
+			if (inMouseButton == Foundation::Mouse::Button::Left)
+			{
+				if (KeyboardUtils::IsModifierExclusivelyDown(inKeyboardModifiers, Keyboard::Shift) && speed > 1)
+					SetMultiSpeed(speed - 1);
+				else if (speed < 8)
+					SetMultiSpeed(speed + 1);
+			}
+			else if (inMouseButton == Foundation::Mouse::Button::Right && speed > 1)
+			{
+				SetMultiSpeed(speed - 1);
+			}
+		};
+
 		// Reset the driver status struct
 		m_DriverState = DriverState();
 
@@ -226,7 +242,7 @@ namespace Editor
 			: song_name;
 
 		m_StatusBar = std::make_unique<StatusBarEdit>(m_MainTextField, m_EditState, m_DriverState, m_DriverInfo->GetAuxilaryDataCollection(), *m_ExecutionHandler,
-				mouse_button_octave, mouse_button_flat_sharp, mouse_button_sid_model, mouse_button_output_device, mouse_button_context_highlight, mouse_button_follow_play);
+				mouse_button_octave, mouse_button_flat_sharp, mouse_button_sid_model, mouse_button_output_device, mouse_button_context_highlight, mouse_button_follow_play, mouse_button_multispeed);
 		m_StatusBar->SetText(m_ActivationMessage.length() > 0 ? m_ActivationMessage : " SID Factory II [Selected song: " + song_selection_text + "]", 2500, false);
 		m_ActivationMessage = "";
 
@@ -2278,6 +2294,8 @@ namespace Editor
 			m_TempoTableDataSource->PushDataToSource();
 			m_CPUMemory->Unlock();
 		}
+
+		SetStatusBarMessage(" Speed: " + std::to_string(inMultiplier) + "x", 1500);
 	}
 }
 

@@ -59,5 +59,15 @@ namespace Editor
 		m_CPUMemory->Lock();
 		m_CPUMemory->GetData(m_SourceAddress, m_Data, m_DataSize);
 		m_CPUMemory->Unlock();
+
+		if (m_ScaleMultiplier > 1)
+		{
+			for (int i = 0; i < m_DataSize; ++i)
+			{
+				unsigned char data = m_Data[i];
+				if (data > 0 && data < 0x80)
+					m_Data[i] = static_cast<unsigned char>(static_cast<int>(data) / m_ScaleMultiplier);
+			}
+		}
 	}
 }
