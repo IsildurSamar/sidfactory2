@@ -74,6 +74,8 @@ namespace Emulation
 		// Emulation update
 		void SetEnableUpdate(bool inEnableUpdate);
 		void SetFastForward(unsigned int inFastForwardUpdateCount);
+		void SetMultiSpeedMultiplier(int inMultiplier);
+		int GetMultiSpeedMultiplier() const;
 
 		void QueueInit(unsigned char inInitArgument);
 		void QueueInit(unsigned char inInitArgument, const std::function<void(CPUMemory*)>& inPostInitCallback);
@@ -194,6 +196,9 @@ namespace Emulation
 		short* m_SampleBuffer;
 		float m_OutputGain;
 		OutputDevice m_OutputDevice;
+
+		// Multi-speed playback
+		int m_MultiSpeedMultiplier;
 	};
 }
 
