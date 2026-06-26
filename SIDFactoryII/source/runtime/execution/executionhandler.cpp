@@ -53,7 +53,7 @@ namespace Emulation
 		, m_UpdateEnabled(false)
 		, m_ErrorState(false)
 		, m_OutputDevice(OutputDevice::RESID)
-		, m_MultiSpeedMultiplier(2)
+		, m_MultiSpeedMultiplier(1)
 	{
 		m_CyclesPerFrame = EMULATION_CYCLES_PER_FRAME_PAL;
 
@@ -458,125 +458,113 @@ namespace Emulation
 		// Attach memory to cpu
 		m_CPU->SetMemory(m_Memory);
 
-		const unsigned int cycles_per_sub_frame = m_CyclesPerFrame / m_MultiSpeedMultiplier;
+		CPUFrameCapture frameCapture(m_CPU, 0xd400, 0xd418, m_CyclesPerFrame);
 
 		unsigned int total_cpu_cycles_spend = 0;
 
-		for (int sub_frame = 0; sub_frame < m_MultiSpeedMultiplier; ++sub_frame)
+		// Execute queued actions
+		for (const Action& action : m_ActionQueue)
 		{
-			CPUFrameCapture frameCapture(m_CPU, 0xd400, 0xd418, cycles_per_sub_frame);
-
-			// Execute queued actions only on the first sub-frame
-			if (sub_frame == 0)
+			switch (action.m_ActionType)
 			{
-				for (const Action& action : m_ActionQueue)
-				{
-					switch (action.m_ActionType)
-					{
-					case ActionType::ApplyMuteState:
-					{
-						const unsigned short offset = action.m_ActionArgument * 7;
-						const unsigned short address = 0xd400 + offset;
+			case ActionType::ApplyMuteState:
+			{
+				const unsigned short offset = action.m_ActionArgument * 7;
+				const unsigned short address = 0xd400 + offset;
 
-						for (int i = 0; i < 7; ++i)
-							frameCapture.Write(address + i, 0, 0);
-					}
-					break;
-					case ActionType::ClearMuteAllState:
-						break;
-					case ActionType::Init:
-					case ActionType::Stop:
-						frameCapture.Capture(GetAddressFromActionType(action.m_ActionType), action.m_ActionArgument);
-						break;
-					case ActionType::Update:
-						if (!m_ErrorState)
-							frameCapture.Capture(GetAddressFromActionType(action.m_ActionType), action.m_ActionArgument);
-					default:
-						break;
-					}
-
-					if (action.m_PostActionCallback)
-						action.m_PostActionCallback(m_Memory);
-				}
-
-				m_ActionQueue.clear();
+				for (int i = 0; i < 7; ++i)
+					frameCapture.Write(address + i, 0, 0);
+			}
+			break;
+			case ActionType::ClearMuteAllState:
+				break;
+			case ActionType::Init:
+			case ActionType::Stop:
+				frameCapture.Capture(GetAddressFromActionType(action.m_ActionType), action.m_ActionArgument);
+				break;
+			case ActionType::Update:
+				if (!m_ErrorState)
+					frameCapture.Capture(GetAddressFromActionType(action.m_ActionType), action.m_ActionArgument);
+			default:
+				break;
 			}
 
-			// Execute driver update on every sub-frame
-			if (m_UpdateEnabled && !m_ErrorState)
+			if (action.m_PostActionCallback)
+				action.m_PostActionCallback(m_Memory);
+		}
+
+		m_ActionQueue.clear();
+
+		// Execute driver update
+		if (m_UpdateEnabled && !m_ErrorState)
+		{
+			bool error = frameCapture.IsMaxCycleCountReached();
+
+			if (!error)
 			{
-				bool error = frameCapture.IsMaxCycleCountReached();
+				frameCapture.Capture(GetAddressFromActionType(ActionType::Update), 0);
+				error = frameCapture.IsMaxCycleCountReached();
 
-				if (!error)
+				if (m_PostUpdateCallback)
+					m_PostUpdateCallback(m_Memory);
+			}
+
+			// Fast-forward
+			if (!error)
+			{
+				for (unsigned int i = 0; i < m_FastForwardUpdateCount; ++i)
 				{
-					frameCapture.Capture(GetAddressFromActionType(ActionType::Update), 0);
-					error = frameCapture.IsMaxCycleCountReached();
+					if (m_CyclesPerFrame - frameCapture.GetCyclesSpend() < m_CyclesPerFrame >> 2)
+						break;
 
+					frameCapture.Capture(GetAddressFromActionType(ActionType::Update), 0);
 					if (m_PostUpdateCallback)
 						m_PostUpdateCallback(m_Memory);
-				}
 
-				// Fast-forward: only on first sub-frame
-				if (sub_frame == 0 && !error)
-				{
-					for (unsigned int i = 0; i < m_FastForwardUpdateCount; ++i)
-					{
-						// Break out if less than a quarter of the cycles of a sub-frame remains
-						if (cycles_per_sub_frame - frameCapture.GetCyclesSpend() < cycles_per_sub_frame >> 2)
-							break;
+					error = frameCapture.IsMaxCycleCountReached();
 
-						frameCapture.Capture(GetAddressFromActionType(ActionType::Update), 0);
-						if (m_PostUpdateCallback)
-							m_PostUpdateCallback(m_Memory);
-
-						error = frameCapture.IsMaxCycleCountReached();
-
-						if (error)
-							break;
-					}
-				}
-
-				if (error)
-				{
-					m_ErrorState = true;
-					m_ErrorMessage = "Emulation of 6510 code exceeded cycle window!";
+					if (error)
+						break;
 				}
 			}
 
-			// Copy SID registers after the last sub-frame's driver update
-			if (sub_frame == m_MultiSpeedMultiplier - 1)
+			if (error)
 			{
-				m_Memory->GetData(0xd400, m_SIDRegisterLastDriverUpdate.m_Buffer, sizeof(m_SIDRegisterLastDriverUpdate.m_Buffer));
+				m_ErrorState = true;
+				m_ErrorMessage = "Emulation of 6510 code exceeded cycle window!";
 			}
+		}
 
-			// Accumulate CPU cycles spent
-			total_cpu_cycles_spend += frameCapture.GetCyclesSpend();
+		// Copy SID registers after driver update
+		m_Memory->GetData(0xd400, m_SIDRegisterLastDriverUpdate.m_Buffer, sizeof(m_SIDRegisterLastDriverUpdate.m_Buffer));
 
-			// Process SID writes and clock SID for this sub-frame
-			int nCycle = 0;
+		// Accumulate CPU cycles spent
+		total_cpu_cycles_spend = frameCapture.GetCyclesSpend();
 
-			while (frameCapture.HasNext())
-			{
-				const CPUFrameCapture::WriteCapture& capture = frameCapture.GetNext();
+		// Process SID writes and clock SID
+		int nCycle = 0;
 
-				FOUNDATION_ASSERT(nCycle <= capture.m_iCycle);
+		while (frameCapture.HasNext())
+		{
+			const CPUFrameCapture::WriteCapture& capture = frameCapture.GetNext();
 
-				const int deltaCycles = capture.m_iCycle - nCycle;
-				SimulateSID(deltaCycles);
-				m_SIDProxy->Write((unsigned char)(capture.m_usReg & 0xff), capture.m_ucVal);
-				nCycle += deltaCycles;
+			FOUNDATION_ASSERT(nCycle <= capture.m_iCycle);
 
-				if (m_OutputDevice == ExecutionHandler::OutputDevice::ASID && m_ASID != nullptr)
-					m_ASID->WriteToSIDRegister(static_cast<unsigned char>(capture.m_usReg & 0xff), capture.m_ucVal);
-			}
+			const int deltaCycles = capture.m_iCycle - nCycle;
+			SimulateSID(deltaCycles);
+			m_SIDProxy->Write((unsigned char)(capture.m_usReg & 0xff), capture.m_ucVal);
+			nCycle += deltaCycles;
 
-			// Clock SID for remaining cycles in this sub-frame
-			while (nCycle < (int)cycles_per_sub_frame)
-			{
-				const int deltaCycles = cycles_per_sub_frame - nCycle;
-				SimulateSID(deltaCycles);
-				nCycle += deltaCycles;
-			}
+			if (m_OutputDevice == ExecutionHandler::OutputDevice::ASID && m_ASID != nullptr)
+				m_ASID->WriteToSIDRegister(static_cast<unsigned char>(capture.m_usReg & 0xff), capture.m_ucVal);
+		}
+
+		// Clock SID for remaining cycles
+		while (nCycle < (int)m_CyclesPerFrame)
+		{
+			const int deltaCycles = m_CyclesPerFrame - nCycle;
+			SimulateSID(deltaCycles);
+			nCycle += deltaCycles;
 		}
 
 		// ASID send once per real frame
@@ -597,7 +585,6 @@ namespace Emulation
 		// Unlock memory access
 		m_Memory->Unlock();
 
-		// Sum of cycles across all sub-frames
 		m_CPUCyclesSpend = total_cpu_cycles_spend;
 
 		// Reset cycle counter
