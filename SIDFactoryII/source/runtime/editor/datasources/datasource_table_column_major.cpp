@@ -35,6 +35,15 @@ namespace Editor
 			{
 				unsigned int write_index = column * m_RowCount + row;
 				unsigned char data = m_Data[i];
+
+				if (m_ScaleMultiplier > 1 && data > 0 && data < 0x80)
+				{
+					int sv = static_cast<int>(data) * m_ScaleMultiplier;
+					if (sv > 0x7e)
+						sv = 0x7e;
+					data = static_cast<unsigned char>(sv);
+				}
+
 				m_RawDataBuffer[write_index] = data;
 
 				++i;

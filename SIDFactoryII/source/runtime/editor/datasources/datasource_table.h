@@ -23,8 +23,12 @@ namespace Editor
 		const unsigned int GetRowCount() const;
 		const unsigned int GetColumnCount() const;
 
+		void SetScaleMultiplier(int inMultiplier);
+		int GetScaleMultiplier() const;
+
 	protected:
 		unsigned int m_RowCount;
 		unsigned int m_ColumnCount;
+		int m_ScaleMultiplier;
 	};
 }

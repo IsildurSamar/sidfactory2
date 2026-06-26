@@ -1336,6 +1336,17 @@ namespace Editor
 			// Create data source
 			std::shared_ptr<DataSourceTable> table_data_source = DriverUtils::CreateTableDataSource(table_definition, m_CPUMemory);
 
+			// Apply multispeed tempo scaling
+			if (table_definition.m_Name == "Tempo")
+			{
+				m_TempoTableDataSource = table_data_source;
+				table_data_source->SetScaleMultiplier(m_ExecutionHandler->GetMultiSpeedMultiplier());
+
+				m_CPUMemory->Lock();
+				table_data_source->PushDataToSource();
+				m_CPUMemory->Unlock();
+			}
+
 			// Create table
 			std::shared_ptr<ComponentTableRowElements> table = [&]() -> std::shared_ptr<ComponentTableRowElements>
 			{

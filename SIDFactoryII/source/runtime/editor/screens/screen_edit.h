@@ -233,6 +233,7 @@ namespace Editor
 		std::vector<std::shared_ptr<DataSourceSequence>> m_SequenceDataSources;
 		std::shared_ptr<DataSourceTable> m_InstrumentTableDataSource;
 		std::shared_ptr<DataSourceTable> m_CommandTableDataSource;
+		std::shared_ptr<DataSourceTable> m_TempoTableDataSource;
 		std::shared_ptr<DataSourceTrackComponents> m_TracksDataSource;
 
 		// Components

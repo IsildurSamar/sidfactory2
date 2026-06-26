@@ -8,6 +8,7 @@ namespace Editor
 		: DataSourceEmulationMemory(inCPUMemory, inSourceAddress, inRowCount * inColumnCount)
 		, m_RowCount(inRowCount)
 		, m_ColumnCount(inColumnCount)
+		, m_ScaleMultiplier(1)
 	{
 	}
 
@@ -44,5 +45,15 @@ namespace Editor
 	const unsigned int DataSourceTable::GetColumnCount() const
 	{
 		return m_ColumnCount;
+	}
+
+	void DataSourceTable::SetScaleMultiplier(int inMultiplier)
+	{
+		m_ScaleMultiplier = inMultiplier;
+	}
+
+	int DataSourceTable::GetScaleMultiplier() const
+	{
+		return m_ScaleMultiplier;
 	}
 }
