@@ -178,6 +178,7 @@ namespace Editor
 		void SendASIDinformation();
 
 		void SetMultiSpeed(int inMultiplier);
+		void ApplyMultiSpeedTempo(int inOldMultiplier, int inNewMultiplier);
 
 		template<typename EXECUTION_CALLBACK>
 		void StartSongsDialogWithSelectionExecution(const std::string& headline, EXECUTION_CALLBACK&& inExecutionCallback);
@@ -236,6 +237,8 @@ namespace Editor
 		std::shared_ptr<DataSourceTable> m_InstrumentTableDataSource;
 		std::shared_ptr<DataSourceTable> m_CommandTableDataSource;
 		std::shared_ptr<DataSourceTable> m_TempoTableDataSource;
+		unsigned short m_TempoTableAddress = 0;
+		unsigned char m_TempoBase[2] = { 0, 0 };
 		std::shared_ptr<DataSourceTrackComponents> m_TracksDataSource;
 
 		// Components
