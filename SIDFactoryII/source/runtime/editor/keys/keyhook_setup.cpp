@@ -103,7 +103,10 @@ namespace Editor
 		definitions.push_back({ "Key.ScreenEdit.ToggleColorSchemes", {{ SDLK_F7, Keyboard::Control }} });
 		definitions.push_back({ "Key.ScreenEdit.RefreshColorSchemes", {{ SDLK_F7, Keyboard::Control | Keyboard::Shift }} });
 		definitions.push_back({ "Key.ScreenEdit.FastForward", {{ 189, Keyboard::None }} });
-		definitions.push_back({ "Key.ScreenEdit.FasterForward", {{ 189, Keyboard::Shift }} });
+		definitions.push_back({ "Key.ScreenEdit.FasterForward",     {{ 189, Keyboard::Shift }} });
+
+		definitions.push_back({ "Key.ScreenEdit.MultiSpeedIncrease", {{ SDLK_EQUALS, Keyboard::Control | Keyboard::Alt }} });
+		definitions.push_back({ "Key.ScreenEdit.MultiSpeedDecrease", {{ SDLK_MINUS,  Keyboard::Control | Keyboard::Alt }} });
 
 		definitions.push_back({ "Key.Track.CursorUp", {{ SDLK_UP, Keyboard::None }} });
 		definitions.push_back({ "Key.Track.CursorDown", {{ SDLK_DOWN, Keyboard::None }} });

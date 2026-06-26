@@ -2157,6 +2157,21 @@ namespace Editor
 			return true;
 		} });
 
+		m_KeyHooks.push_back({ "Key.ScreenEdit.MultiSpeedIncrease", m_KeyHookStore, [&]()
+		{
+			int speed = m_ExecutionHandler->GetMultiSpeedMultiplier();
+			if (speed < 8)
+				SetMultiSpeed(speed + 1);
+			return true;
+		} });
+		m_KeyHooks.push_back({ "Key.ScreenEdit.MultiSpeedDecrease", m_KeyHookStore, [&]()
+		{
+			int speed = m_ExecutionHandler->GetMultiSpeedMultiplier();
+			if (speed > 1)
+				SetMultiSpeed(speed - 1);
+			return true;
+		} });
+
 /*		m_KeyHooks.push_back({ "Key.ScreenEdit.ToggleRecordOutput", SDLK_r, Keyboard::Control, [&]()
 		{
 			if (m_ExecutionHandler->IsWritingOutputToFile())
@@ -2250,6 +2265,19 @@ namespace Editor
 
 		m_ExecutionHandler->TellSIDWriteOrderInfo(SIDWriteInfoList);
 		m_ExecutionHandler->TellSIDEnvironment();
+	}
+
+	void ScreenEdit::SetMultiSpeed(int inMultiplier)
+	{
+		m_ExecutionHandler->SetMultiSpeedMultiplier(inMultiplier);
+
+		if (m_TempoTableDataSource != nullptr)
+		{
+			m_TempoTableDataSource->SetScaleMultiplier(inMultiplier);
+			m_CPUMemory->Lock();
+			m_TempoTableDataSource->PushDataToSource();
+			m_CPUMemory->Unlock();
+		}
 	}
 }
 

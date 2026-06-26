@@ -177,6 +177,8 @@ namespace Editor
 
 		void SendASIDinformation();
 
+		void SetMultiSpeed(int inMultiplier);
+
 		template<typename EXECUTION_CALLBACK>
 		void StartSongsDialogWithSelectionExecution(const std::string& headline, EXECUTION_CALLBACK&& inExecutionCallback);
 		template<typename EXECUTION_CALLBACK>
