@@ -54,6 +54,7 @@ namespace Emulation
 		, m_ErrorState(false)
 		, m_OutputDevice(OutputDevice::RESID)
 		, m_MultiSpeedMultiplier(1)
+		, m_TempoCounterAddress(0)
 	{
 		m_CyclesPerFrame = EMULATION_CYCLES_PER_FRAME_PAL;
 
@@ -363,6 +364,13 @@ namespace Emulation
 		Unlock();
 	}
 
+	void ExecutionHandler::SetTempoCounterAddress(unsigned short inAddress)
+	{
+		Lock();
+		m_TempoCounterAddress = inAddress;
+		Unlock();
+	}
+
 	void ExecutionHandler::SetPostUpdateCallback(const std::function<void(CPUMemory*)>& inPostUpdateCallback)
 	{
 		Lock();
@@ -460,12 +468,17 @@ namespace Emulation
 
 		unsigned int total_cpu_cycles_spend = 0;
 
-		// Multi-speed: number of driver ticks per real PAL frame. The musical tempo is
-		// kept correct by the (already wired) Tempo-table x N scaling in the data source,
-		// so here we only need to run the player N times and split the frame's audio
-		// budget into N equal sub-frames -> genuine 2x/3x/... playback at the same speed.
+		// Multi-speed: run the player N times per real PAL frame. Sub-frame 0 is the real
+		// 50Hz tick that advances the sequencer/rows. On the extra sub-frames (sub > 0) we
+		// pin the driver's tempo counter so the player only re-runs synthesis (SID regs,
+		// instrument/effect programs) without advancing the song position. The natural
+		// tempo-counter value from sub-frame 0 is saved and restored after the loop so the
+		// song keeps its correct musical tempo across real frames.
 		const int multiplier = (m_MultiSpeedMultiplier < 1) ? 1 : m_MultiSpeedMultiplier;
 		const unsigned int baseSubFrameCycles = m_CyclesPerFrame / static_cast<unsigned int>(multiplier);
+
+		const bool multiSpeedHold = (multiplier > 1) && (m_TempoCounterAddress != 0);
+		unsigned char savedTempoCounter = 0;
 
 		for (int sub = 0; sub < multiplier; ++sub)
 		{
@@ -513,6 +526,12 @@ namespace Emulation
 				m_ActionQueue.clear();
 			}
 
+			// On extra sub-frames, hold the tempo counter so the sequencer does not advance
+			// again within this real frame (only synthesis re-runs). Same technique SF2 uses
+			// for live note input. Re-applied each extra tick; restored after the loop.
+			if (multiSpeedHold && sub > 0)
+				m_Memory->SetByte(m_TempoCounterAddress, 0x0f);
+
 			// Execute driver update for this sub-frame
 			if (m_UpdateEnabled && !m_ErrorState)
 			{
@@ -523,7 +542,9 @@ namespace Emulation
 					frameCapture.Capture(GetAddressFromActionType(ActionType::Update), 0);
 					error = frameCapture.IsMaxCycleCountReached();
 
-					if (m_PostUpdateCallback)
+					// Only the real (first) sub-frame drives the editor post-update logic
+					// (cursor/song-position tracking), so it ticks at 50Hz, not N x 50Hz.
+					if (sub == 0 && m_PostUpdateCallback)
 						m_PostUpdateCallback(m_Memory);
 				}
 
@@ -555,6 +576,11 @@ namespace Emulation
 				}
 			}
 
+			// Remember the natural tempo-counter value produced by the real 50Hz tick,
+			// so it can be restored after the extra (held) sub-frames.
+			if (multiSpeedHold && sub == 0)
+				savedTempoCounter = m_Memory->GetByte(m_TempoCounterAddress);
+
 			// Accumulate CPU cycles spent across all sub-frames
 			total_cpu_cycles_spend += frameCapture.GetCyclesSpend();
 
@@ -584,6 +610,11 @@ namespace Emulation
 				nCycle += deltaCycles;
 			}
 		}
+
+		// Restore the tempo counter so the next real frame continues the song's tempo
+		// from where the real 50Hz tick left off (the held sub-frames must not affect it).
+		if (multiSpeedHold)
+			m_Memory->SetByte(m_TempoCounterAddress, savedTempoCounter);
 
 		// Copy SID registers after the last driver update (once per real frame)
 		m_Memory->GetData(0xd400, m_SIDRegisterLastDriverUpdate.m_Buffer, sizeof(m_SIDRegisterLastDriverUpdate.m_Buffer));
