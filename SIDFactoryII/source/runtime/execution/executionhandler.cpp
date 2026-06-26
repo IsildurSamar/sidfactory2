@@ -458,114 +458,133 @@ namespace Emulation
 		// Attach memory to cpu
 		m_CPU->SetMemory(m_Memory);
 
-		CPUFrameCapture frameCapture(m_CPU, 0xd400, 0xd418, m_CyclesPerFrame);
-
 		unsigned int total_cpu_cycles_spend = 0;
 
-		// Execute queued actions
-		for (const Action& action : m_ActionQueue)
+		// Multi-speed: number of driver ticks per real PAL frame. The musical tempo is
+		// kept correct by the (already wired) Tempo-table x N scaling in the data source,
+		// so here we only need to run the player N times and split the frame's audio
+		// budget into N equal sub-frames -> genuine 2x/3x/... playback at the same speed.
+		const int multiplier = (m_MultiSpeedMultiplier < 1) ? 1 : m_MultiSpeedMultiplier;
+		const unsigned int baseSubFrameCycles = m_CyclesPerFrame / static_cast<unsigned int>(multiplier);
+
+		for (int sub = 0; sub < multiplier; ++sub)
 		{
-			switch (action.m_ActionType)
+			// Distribute any remainder cycles to the last sub-frame, so the total clocked
+			// per real PAL frame stays exactly m_CyclesPerFrame (constant sample count, no drift).
+			const unsigned int subFrameCycles = (sub == multiplier - 1)
+				? (m_CyclesPerFrame - baseSubFrameCycles * static_cast<unsigned int>(multiplier - 1))
+				: baseSubFrameCycles;
+
+			CPUFrameCapture frameCapture(m_CPU, 0xd400, 0xd418, subFrameCycles);
+
+			// Queued actions (init/stop/mute) are once-per-real-frame events: run on sub-frame 0.
+			if (sub == 0)
 			{
-			case ActionType::ApplyMuteState:
-			{
-				const unsigned short offset = action.m_ActionArgument * 7;
-				const unsigned short address = 0xd400 + offset;
-
-				for (int i = 0; i < 7; ++i)
-					frameCapture.Write(address + i, 0, 0);
-			}
-			break;
-			case ActionType::ClearMuteAllState:
-				break;
-			case ActionType::Init:
-			case ActionType::Stop:
-				frameCapture.Capture(GetAddressFromActionType(action.m_ActionType), action.m_ActionArgument);
-				break;
-			case ActionType::Update:
-				if (!m_ErrorState)
-					frameCapture.Capture(GetAddressFromActionType(action.m_ActionType), action.m_ActionArgument);
-			default:
-				break;
-			}
-
-			if (action.m_PostActionCallback)
-				action.m_PostActionCallback(m_Memory);
-		}
-
-		m_ActionQueue.clear();
-
-		// Execute driver update
-		if (m_UpdateEnabled && !m_ErrorState)
-		{
-			bool error = frameCapture.IsMaxCycleCountReached();
-
-			if (!error)
-			{
-				frameCapture.Capture(GetAddressFromActionType(ActionType::Update), 0);
-				error = frameCapture.IsMaxCycleCountReached();
-
-				if (m_PostUpdateCallback)
-					m_PostUpdateCallback(m_Memory);
-			}
-
-			// Fast-forward
-			if (!error)
-			{
-				for (unsigned int i = 0; i < m_FastForwardUpdateCount; ++i)
+				for (const Action& action : m_ActionQueue)
 				{
-					if (m_CyclesPerFrame - frameCapture.GetCyclesSpend() < m_CyclesPerFrame >> 2)
+					switch (action.m_ActionType)
+					{
+					case ActionType::ApplyMuteState:
+					{
+						const unsigned short offset = action.m_ActionArgument * 7;
+						const unsigned short address = 0xd400 + offset;
+
+						for (int i = 0; i < 7; ++i)
+							frameCapture.Write(address + i, 0, 0);
+					}
+					break;
+					case ActionType::ClearMuteAllState:
 						break;
+					case ActionType::Init:
+					case ActionType::Stop:
+						frameCapture.Capture(GetAddressFromActionType(action.m_ActionType), action.m_ActionArgument);
+						break;
+					case ActionType::Update:
+						if (!m_ErrorState)
+							frameCapture.Capture(GetAddressFromActionType(action.m_ActionType), action.m_ActionArgument);
+					default:
+						break;
+					}
 
+					if (action.m_PostActionCallback)
+						action.m_PostActionCallback(m_Memory);
+				}
+
+				m_ActionQueue.clear();
+			}
+
+			// Execute driver update for this sub-frame
+			if (m_UpdateEnabled && !m_ErrorState)
+			{
+				bool error = frameCapture.IsMaxCycleCountReached();
+
+				if (!error)
+				{
 					frameCapture.Capture(GetAddressFromActionType(ActionType::Update), 0);
-					if (m_PostUpdateCallback)
-						m_PostUpdateCallback(m_Memory);
-
 					error = frameCapture.IsMaxCycleCountReached();
 
-					if (error)
-						break;
+					if (m_PostUpdateCallback)
+						m_PostUpdateCallback(m_Memory);
+				}
+
+				// Fast-forward (seeking) is applied within the first sub-frame only
+				if (sub == 0 && !error)
+				{
+					for (unsigned int i = 0; i < m_FastForwardUpdateCount; ++i)
+					{
+						if (subFrameCycles - frameCapture.GetCyclesSpend() < subFrameCycles >> 2)
+							break;
+
+						frameCapture.Capture(GetAddressFromActionType(ActionType::Update), 0);
+						if (m_PostUpdateCallback)
+							m_PostUpdateCallback(m_Memory);
+
+						error = frameCapture.IsMaxCycleCountReached();
+
+						if (error)
+							break;
+					}
+				}
+
+				if (error)
+				{
+					m_ErrorState = true;
+					m_ErrorMessage = "Emulation of 6510 code exceeded cycle window!";
 				}
 			}
 
-			if (error)
+			// Accumulate CPU cycles spent across all sub-frames
+			total_cpu_cycles_spend += frameCapture.GetCyclesSpend();
+
+			// Process this sub-frame's SID writes and clock the SID continuously
+			int nCycle = 0;
+
+			while (frameCapture.HasNext())
 			{
-				m_ErrorState = true;
-				m_ErrorMessage = "Emulation of 6510 code exceeded cycle window!";
+				const CPUFrameCapture::WriteCapture& capture = frameCapture.GetNext();
+
+				FOUNDATION_ASSERT(nCycle <= capture.m_iCycle);
+
+				const int deltaCycles = capture.m_iCycle - nCycle;
+				SimulateSID(deltaCycles);
+				m_SIDProxy->Write((unsigned char)(capture.m_usReg & 0xff), capture.m_ucVal);
+				nCycle += deltaCycles;
+
+				if (m_OutputDevice == ExecutionHandler::OutputDevice::ASID && m_ASID != nullptr)
+					m_ASID->WriteToSIDRegister(static_cast<unsigned char>(capture.m_usReg & 0xff), capture.m_ucVal);
+			}
+
+			// Clock SID for the remaining cycles of this sub-frame
+			while (nCycle < (int)subFrameCycles)
+			{
+				const int deltaCycles = (int)subFrameCycles - nCycle;
+				SimulateSID(deltaCycles);
+				nCycle += deltaCycles;
 			}
 		}
 
-		// Copy SID registers after driver update
+		// Copy SID registers after the last driver update (once per real frame)
 		m_Memory->GetData(0xd400, m_SIDRegisterLastDriverUpdate.m_Buffer, sizeof(m_SIDRegisterLastDriverUpdate.m_Buffer));
-
-		// Accumulate CPU cycles spent
-		total_cpu_cycles_spend = frameCapture.GetCyclesSpend();
-
-		// Process SID writes and clock SID
-		int nCycle = 0;
-
-		while (frameCapture.HasNext())
-		{
-			const CPUFrameCapture::WriteCapture& capture = frameCapture.GetNext();
-
-			FOUNDATION_ASSERT(nCycle <= capture.m_iCycle);
-
-			const int deltaCycles = capture.m_iCycle - nCycle;
-			SimulateSID(deltaCycles);
-			m_SIDProxy->Write((unsigned char)(capture.m_usReg & 0xff), capture.m_ucVal);
-			nCycle += deltaCycles;
-
-			if (m_OutputDevice == ExecutionHandler::OutputDevice::ASID && m_ASID != nullptr)
-				m_ASID->WriteToSIDRegister(static_cast<unsigned char>(capture.m_usReg & 0xff), capture.m_ucVal);
-		}
-
-		// Clock SID for remaining cycles
-		while (nCycle < (int)m_CyclesPerFrame)
-		{
-			const int deltaCycles = m_CyclesPerFrame - nCycle;
-			SimulateSID(deltaCycles);
-			nCycle += deltaCycles;
-		}
 
 		// ASID send once per real frame
 		if (m_ASID != nullptr)
