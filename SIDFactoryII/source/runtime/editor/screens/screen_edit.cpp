@@ -1352,13 +1352,10 @@ namespace Editor
 			// Create data source
 			std::shared_ptr<DataSourceTable> table_data_source = DriverUtils::CreateTableDataSource(table_definition, m_CPUMemory);
 
-			// Multispeed tempo automation (Driver 11): remember the Tempo table reference
-			// and its base address. The first two bytes are auto-scaled in SetMultiSpeed.
+			// Multispeed tempo automation (Driver 11): keep a reference to the Tempo table;
+			// SetMultiSpeed scales its value entries (skipping the terminator) by N.
 			if (table_definition.m_Name == "Tempo")
-			{
 				m_TempoTableDataSource = table_data_source;
-				m_TempoTableAddress = table_definition.m_Address;
-			}
 
 			// Create table
 			std::shared_ptr<ComponentTableRowElements> table = [&]() -> std::shared_ptr<ComponentTableRowElements>
@@ -2295,33 +2292,49 @@ namespace Editor
 
 	void ScreenEdit::ApplyMultiSpeedTempo(int inOldMultiplier, int inNewMultiplier)
 	{
-		if (m_TempoTableAddress == 0)
+		if (m_TempoTableDataSource == nullptr)
 			return;
 
 		// Restricted to Driver 11 (major version 11; high bit flags a non-standard driver).
 		if ((m_DriverInfo->GetDescriptor().m_DriverVersionMajor & 0x7f) != 11)
 			return;
 
-		m_CPUMemory->Lock();
+		DataSourceTable& tempo = *m_TempoTableDataSource;
+		const int count = static_cast<int>(tempo.GetRowCount() * tempo.GetColumnCount());
 
-		// Anchor to the user's base (1x) values, captured when leaving single speed,
-		// so 1x -> 2x -> 3x ... never compounds.
+		// Anchor to the user's base (1x) tempo program, captured when leaving single
+		// speed, so 1x -> 2x -> 3x ... never compounds.
 		if (inOldMultiplier <= 1)
 		{
-			m_TempoBase[0] = (*m_CPUMemory)[m_TempoTableAddress + 0];
-			m_TempoBase[1] = (*m_CPUMemory)[m_TempoTableAddress + 1];
+			m_TempoBase.assign(count, 0);
+			for (int i = 0; i < count; ++i)
+				m_TempoBase[i] = tempo[i];
 		}
 
 		const int multiplier = inNewMultiplier < 1 ? 1 : inNewMultiplier;
 
-		for (int i = 0; i < 2; ++i)
+		for (int i = 0; i < count && i < static_cast<int>(m_TempoBase.size()); ++i)
 		{
-			int scaled = static_cast<int>(m_TempoBase[i]) * multiplier;
-			if (scaled > 0x7e)			// stay below the 0x7f tempo-program terminator
+			const unsigned char base = m_TempoBase[i];
+
+			// 0x7f is the tempo-program terminator and 0x80+ are markers - never scale
+			// them (corrupting the terminator is what made the tempo run erratically).
+			if (base >= 0x7f)
+				break;
+			if (base == 0x00)
+				continue;
+
+			int scaled = static_cast<int>(base) * multiplier;
+			if (scaled > 0x7e)
 				scaled = 0x7e;
-			(*m_CPUMemory)[m_TempoTableAddress + i] = static_cast<unsigned char>(scaled);
+
+			tempo[i] = static_cast<unsigned char>(scaled);
 		}
 
+		// Write the scaled program to emulation memory (keeps m_Data and memory in sync,
+		// exactly like a manual tempo edit, which is the path proven to work).
+		m_CPUMemory->Lock();
+		m_TempoTableDataSource->PushDataToSource();
 		m_CPUMemory->Unlock();
 	}
 }
