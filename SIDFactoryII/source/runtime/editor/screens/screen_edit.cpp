@@ -1398,6 +1398,9 @@ namespace Editor
 				}
 			}();
 
+			if (table_definition.m_Name == "Tempo")
+				m_TempoTableComponent = table;
+
 			// Enable insert and delete on the table
 			if (table_definition.m_PropertyEnabledInsertDelete)
 			{
@@ -2299,43 +2302,45 @@ namespace Editor
 		if ((m_DriverInfo->GetDescriptor().m_DriverVersionMajor & 0x7f) != 11)
 			return;
 
+		const int old_n = inOldMultiplier < 1 ? 1 : inOldMultiplier;
+		const int new_n = inNewMultiplier < 1 ? 1 : inNewMultiplier;
+
 		DataSourceTable& tempo = *m_TempoTableDataSource;
 		const int count = static_cast<int>(tempo.GetRowCount() * tempo.GetColumnCount());
 
-		// Anchor to the user's base (1x) tempo program, captured when leaving single
-		// speed, so 1x -> 2x -> 3x ... never compounds.
-		if (inOldMultiplier <= 1)
+		// Rescale each tempo value so that (value / multiplier) - the musical tempo - is
+		// preserved across multispeed changes: base = current / oldN, new = base * newN.
+		// Deriving from the current value (instead of a stored snapshot) is self-correcting
+		// and cannot drift/compound.
+		for (int i = 0; i < count; ++i)
 		{
-			m_TempoBase.assign(count, 0);
-			for (int i = 0; i < count; ++i)
-				m_TempoBase[i] = tempo[i];
-		}
+			const unsigned char current = tempo[i];
 
-		const int multiplier = inNewMultiplier < 1 ? 1 : inNewMultiplier;
-
-		for (int i = 0; i < count && i < static_cast<int>(m_TempoBase.size()); ++i)
-		{
-			const unsigned char base = m_TempoBase[i];
-
-			// 0x7f is the tempo-program terminator and 0x80+ are markers - never scale
-			// them (corrupting the terminator is what made the tempo run erratically).
-			if (base >= 0x7f)
+			// 0x7f is the tempo-program terminator and 0x80+ are markers - never touch them.
+			if (current >= 0x7f)
 				break;
-			if (base == 0x00)
+			if (current == 0x00)
 				continue;
 
-			int scaled = static_cast<int>(base) * multiplier;
+			int base = static_cast<int>(current) / old_n;
+			if (base < 1)
+				base = 1;
+
+			int scaled = base * new_n;
 			if (scaled > 0x7e)
 				scaled = 0x7e;
 
 			tempo[i] = static_cast<unsigned char>(scaled);
 		}
 
-		// Write the scaled program to emulation memory (keeps m_Data and memory in sync,
-		// exactly like a manual tempo edit, which is the path proven to work).
+		// Write to emulation memory (what the driver reads).
 		m_CPUMemory->Lock();
 		m_TempoTableDataSource->PushDataToSource();
 		m_CPUMemory->Unlock();
+
+		// Refresh the on-screen Tempo table immediately (no need to enter/leave it).
+		if (m_TempoTableComponent != nullptr)
+			m_TempoTableComponent->ForceRefresh();
 	}
 }
 

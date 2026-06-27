@@ -237,7 +237,6 @@ namespace Editor
 		std::shared_ptr<DataSourceTable> m_InstrumentTableDataSource;
 		std::shared_ptr<DataSourceTable> m_CommandTableDataSource;
 		std::shared_ptr<DataSourceTable> m_TempoTableDataSource;
-		std::vector<unsigned char> m_TempoBase;
 		std::shared_ptr<DataSourceTrackComponents> m_TracksDataSource;
 
 		// Components
@@ -246,6 +245,7 @@ namespace Editor
 		std::shared_ptr<ComponentStringListSelector> m_PlayMarkerListComponent;
 		std::shared_ptr<ComponentTableRowElements> m_InstrumentTableComponent;
 		std::shared_ptr<ComponentTableRowElements> m_CommandTableComponent;
+		std::shared_ptr<ComponentTableRowElements> m_TempoTableComponent;
 
 		bool m_ActivationFocusOnComponent;
 		int m_ActivationComponentFocusID;
