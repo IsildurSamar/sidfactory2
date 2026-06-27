@@ -222,7 +222,7 @@ namespace Editor
 			{
 				if (KeyboardUtils::IsModifierExclusivelyDown(inKeyboardModifiers, Keyboard::Shift) && speed > 1)
 					SetMultiSpeed(speed - 1);
-				else if (speed < 8)
+				else if (speed < 16)
 					SetMultiSpeed(speed + 1);
 			}
 			else if (inMouseButton == Foundation::Mouse::Button::Right && speed > 1)
@@ -2173,7 +2173,7 @@ namespace Editor
 		m_KeyHooks.push_back({ "Key.ScreenEdit.MultiSpeedIncrease", m_KeyHookStore, [&]()
 		{
 			int speed = m_ExecutionHandler->GetMultiSpeedMultiplier();
-			if (speed < 8)
+			if (speed < 16)
 				SetMultiSpeed(speed + 1);
 			return true;
 		} });

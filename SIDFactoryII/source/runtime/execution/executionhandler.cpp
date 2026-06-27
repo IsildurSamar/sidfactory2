@@ -290,8 +290,8 @@ namespace Emulation
 	{
 		if (inMultiplier < 1)
 			inMultiplier = 1;
-		if (inMultiplier > 8)
-			inMultiplier = 8;
+		if (inMultiplier > 16)
+			inMultiplier = 16;
 		Lock();
 		m_MultiSpeedMultiplier = inMultiplier;
 		Unlock();
