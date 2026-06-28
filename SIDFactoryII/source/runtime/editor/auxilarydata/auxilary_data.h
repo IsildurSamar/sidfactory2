@@ -23,7 +23,8 @@ namespace Editor
 			HardwarePreferences,
 			PlayMarkers,
 			TableText,
-			Songs
+			Songs,
+			MultiSpeed
 		};
 
 		class FileHeader

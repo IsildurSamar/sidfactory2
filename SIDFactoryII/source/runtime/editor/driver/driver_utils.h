@@ -42,5 +42,10 @@ namespace Editor
 		std::vector<SIDWriteInformation> GetSIDWriteInformationFromDriver(Emulation::CPUMemory& inCPUMemory, const DriverInfo& inDriverInfo);
 
 		void InsertIRQ(const Editor::DriverInfo& inDriverInfo, Utility::C64FileWriter& inFileWriter);
+
+		// Rescale the Driver 11 Tempo-table values from one multispeed multiplier to another
+		// (value = base * multiplier). Skips the tempo-program terminator (0x7f) and markers
+		// (0x80+). No-op for other drivers. The caller must hold the CPU memory lock.
+		void RescaleTempoTable(Emulation::CPUMemory& inCPUMemory, const Editor::DriverInfo& inDriverInfo, int inOldMultiplier, int inNewMultiplier);
 	}
 }

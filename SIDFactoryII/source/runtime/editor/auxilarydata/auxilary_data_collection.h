@@ -15,6 +15,7 @@ namespace Editor
 	class AuxilaryDataEditingPreferences;
 	class AuxilaryDataTableText;
 	class AuxilaryDataSongs;
+	class AuxilaryDataMultiSpeed;
 
 	class AuxilaryDataCollection
 	{
@@ -34,6 +35,8 @@ namespace Editor
 		const AuxilaryDataTableText& GetTableText() const;
 		AuxilaryDataSongs& GetSongs();
 		const AuxilaryDataSongs& GetSongs() const;
+		AuxilaryDataMultiSpeed& GetMultiSpeed();
+		const AuxilaryDataMultiSpeed& GetMultiSpeed() const;
 
 		void Reset();
 
@@ -46,5 +49,6 @@ namespace Editor
 		std::unique_ptr<AuxilaryDataEditingPreferences> m_EditingPreferences;
 		std::unique_ptr<AuxilaryDataTableText> m_TableText;
 		std::unique_ptr<AuxilaryDataSongs> m_Songs;
+		std::unique_ptr<AuxilaryDataMultiSpeed> m_MultiSpeed;
 	};
 }

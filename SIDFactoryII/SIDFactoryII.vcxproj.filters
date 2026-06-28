@@ -374,6 +374,9 @@
     <ClCompile Include="source\runtime\editor\auxilarydata\auxilary_data_hardware_preferences.cpp">
       <Filter>source\runtime\editor\auxilarydata</Filter>
     </ClCompile>
+    <ClCompile Include="source\runtime\editor\auxilarydata\auxilary_data_multispeed.cpp">
+      <Filter>source\runtime\editor\auxilarydata</Filter>
+    </ClCompile>
     <ClCompile Include="source\runtime\editor\auxilarydata\auxilary_data_play_markers.cpp">
       <Filter>source\runtime\editor\auxilarydata</Filter>
     </ClCompile>
@@ -896,6 +899,9 @@
       <Filter>source\runtime\editor\auxilarydata</Filter>
     </ClInclude>
     <ClInclude Include="source\runtime\editor\auxilarydata\auxilary_data_hardware_preferences.h">
+      <Filter>source\runtime\editor\auxilarydata</Filter>
+    </ClInclude>
+    <ClInclude Include="source\runtime\editor\auxilarydata\auxilary_data_multispeed.h">
       <Filter>source\runtime\editor\auxilarydata</Filter>
     </ClInclude>
     <ClInclude Include="source\runtime\editor\auxilarydata\auxilary_data_play_markers.h">

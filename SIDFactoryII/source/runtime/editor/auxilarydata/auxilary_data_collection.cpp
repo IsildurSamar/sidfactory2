@@ -5,6 +5,7 @@
 #include "auxilary_data_play_markers.h"
 #include "auxilary_data_table_text.h"
 #include "auxilary_data_songs.h"
+#include "auxilary_data_multispeed.h"
 
 #include "utils/c64file.h"
 
@@ -18,6 +19,7 @@ namespace Editor
 		, m_PlayMarkers(std::make_unique<AuxilaryDataPlayMarkers>())
 		, m_TableText(std::make_unique<AuxilaryDataTableText>())
 		, m_Songs(std::make_unique<AuxilaryDataSongs>())
+		, m_MultiSpeed(std::make_unique<AuxilaryDataMultiSpeed>())
 	{
 
 	}
@@ -36,6 +38,7 @@ namespace Editor
 		*m_PlayMarkers = *inRHS.m_PlayMarkers;
 		*m_TableText = *inRHS.m_TableText;
 		*m_Songs = *inRHS.m_Songs;
+		*m_MultiSpeed = *inRHS.m_MultiSpeed;
 	}
 
 
@@ -46,6 +49,7 @@ namespace Editor
 		m_PlayMarkers->Reset();
 		m_TableText->Reset();
 		m_Songs->Reset();
+		m_MultiSpeed->Reset();
 	}
 
 
@@ -104,6 +108,16 @@ namespace Editor
 		return *m_Songs;
 	}
 
+	AuxilaryDataMultiSpeed& AuxilaryDataCollection::GetMultiSpeed()
+	{
+		return *m_MultiSpeed;
+	}
+
+	const AuxilaryDataMultiSpeed& AuxilaryDataCollection::GetMultiSpeed() const
+	{
+		return *m_MultiSpeed;
+	}
+
 	bool AuxilaryDataCollection::Save(Utility::C64FileWriter& inWriter) const
 	{
 		AuxilaryData end_mark;
@@ -113,6 +127,7 @@ namespace Editor
 		m_EditingPreferences->Write(inWriter);
 		m_TableText->Write(inWriter);
 		m_Songs->Write(inWriter);
+		m_MultiSpeed->Write(inWriter);
 		
 		end_mark.Write(inWriter);
 
@@ -132,11 +147,17 @@ namespace Editor
 			if (end_mark.Read(header, inReader))
 				break;
 
-			m_PlayMarkers->Read(header, inReader);
-			m_HardwarePreferences->Read(header, inReader);
-			m_EditingPreferences->Read(header, inReader);
-			m_TableText->Read(header, inReader);
-			m_Songs->Read(header, inReader);
+			const bool consumed =
+				m_PlayMarkers->Read(header, inReader)
+				|| m_HardwarePreferences->Read(header, inReader)
+				|| m_EditingPreferences->Read(header, inReader)
+				|| m_TableText->Read(header, inReader)
+				|| m_Songs->Read(header, inReader)
+				|| m_MultiSpeed->Read(header, inReader);
+
+			// Skip blocks of unknown type (forward compatibility with newer files).
+			if (!consumed)
+				inReader.ReadBytes(header.GetDataSize());
 		}
 
 		return true;
