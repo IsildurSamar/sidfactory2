@@ -1352,11 +1352,6 @@ namespace Editor
 			// Create data source
 			std::shared_ptr<DataSourceTable> table_data_source = DriverUtils::CreateTableDataSource(table_definition, m_CPUMemory);
 
-			// Multispeed tempo automation (Driver 11): keep a reference to the Tempo table;
-			// SetMultiSpeed scales its value entries (skipping the terminator) by N.
-			if (table_definition.m_Name == "Tempo")
-				m_TempoTableDataSource = table_data_source;
-
 			// Create table
 			std::shared_ptr<ComponentTableRowElements> table = [&]() -> std::shared_ptr<ComponentTableRowElements>
 			{
@@ -1397,9 +1392,6 @@ namespace Editor
 					);
 				}
 			}();
-
-			if (table_definition.m_Name == "Tempo")
-				m_TempoTableComponent = table;
 
 			// Enable insert and delete on the table
 			if (table_definition.m_PropertyEnabledInsertDelete)
@@ -2282,65 +2274,11 @@ namespace Editor
 
 	void ScreenEdit::SetMultiSpeed(int inMultiplier)
 	{
-		const int old_multiplier = m_ExecutionHandler->GetMultiSpeedMultiplier();
-
-		// Multispeed controls how many times the player runs per real frame.
+		// Multispeed ONLY controls how many times the player routine is called per frame.
+		// The tempo table (song data) is never modified - the user manages the tempo digits
+		// manually, exactly like writing multispeed playback hooks on a real C64.
 		m_ExecutionHandler->SetMultiSpeedMultiplier(inMultiplier);
 		SetStatusBarMessage(" Speed: " + std::to_string(inMultiplier) + "x", 1500);
-
-		// Driver 11 only: keep the musical tempo correct by scaling the first two
-		// Tempo-table bytes to (base x N) while the player runs N times per frame.
-		ApplyMultiSpeedTempo(old_multiplier, inMultiplier);
-	}
-
-	void ScreenEdit::ApplyMultiSpeedTempo(int inOldMultiplier, int inNewMultiplier)
-	{
-		if (m_TempoTableDataSource == nullptr)
-			return;
-
-		// Restricted to Driver 11 (major version 11; high bit flags a non-standard driver).
-		if ((m_DriverInfo->GetDescriptor().m_DriverVersionMajor & 0x7f) != 11)
-			return;
-
-		const int old_n = inOldMultiplier < 1 ? 1 : inOldMultiplier;
-		const int new_n = inNewMultiplier < 1 ? 1 : inNewMultiplier;
-
-		DataSourceTable& tempo = *m_TempoTableDataSource;
-		const int count = static_cast<int>(tempo.GetRowCount() * tempo.GetColumnCount());
-
-		// Rescale each tempo value so that (value / multiplier) - the musical tempo - is
-		// preserved across multispeed changes: base = current / oldN, new = base * newN.
-		// Deriving from the current value (instead of a stored snapshot) is self-correcting
-		// and cannot drift/compound.
-		for (int i = 0; i < count; ++i)
-		{
-			const unsigned char current = tempo[i];
-
-			// 0x7f is the tempo-program terminator and 0x80+ are markers - never touch them.
-			if (current >= 0x7f)
-				break;
-			if (current == 0x00)
-				continue;
-
-			int base = static_cast<int>(current) / old_n;
-			if (base < 1)
-				base = 1;
-
-			int scaled = base * new_n;
-			if (scaled > 0x7e)
-				scaled = 0x7e;
-
-			tempo[i] = static_cast<unsigned char>(scaled);
-		}
-
-		// Write to emulation memory (what the driver reads).
-		m_CPUMemory->Lock();
-		m_TempoTableDataSource->PushDataToSource();
-		m_CPUMemory->Unlock();
-
-		// Refresh the on-screen Tempo table immediately (no need to enter/leave it).
-		if (m_TempoTableComponent != nullptr)
-			m_TempoTableComponent->ForceRefresh();
 	}
 }
 
