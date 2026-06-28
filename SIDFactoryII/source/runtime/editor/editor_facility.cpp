@@ -605,15 +605,8 @@ namespace Editor
 				m_ExecutionHandler->SetStopVector(m_DriverInfo->GetDriverCommon().m_StopAddress);
 				m_ExecutionHandler->SetUpdateVector(m_DriverInfo->GetDriverCommon().m_UpdateAddress);
 
-				// Restore the saved multispeed and re-apply the x N tempo (Driver 11).
-				{
-					const int multispeed_n = m_DriverInfo->GetAuxilaryDataCollection().GetMultiSpeed().GetMultiplier();
-					m_ExecutionHandler->SetMultiSpeedMultiplier(multispeed_n);
-
-					m_CPUMemory->Lock();
-					DriverUtils::RescaleTempoTable(*m_CPUMemory, *m_DriverInfo, 1, multispeed_n);
-					m_CPUMemory->Unlock();
-				}
+				// Restore the saved multispeed multiplier (the tempo table is loaded as-is).
+				m_ExecutionHandler->SetMultiSpeedMultiplier(m_DriverInfo->GetAuxilaryDataCollection().GetMultiSpeed().GetMultiplier());
 
 				// Give the first song a default name, if it hasn't one and is the only song in the loaded file
 				EditorUtils::UpdateSongNameOfSingleSongPackages(*m_DriverInfo);
@@ -713,15 +706,8 @@ namespace Editor
 					m_ExecutionHandler->SetStopVector(m_DriverInfo->GetDriverCommon().m_StopAddress);
 					m_ExecutionHandler->SetUpdateVector(m_DriverInfo->GetDriverCommon().m_UpdateAddress);
 
-					// Restore the saved multispeed and re-apply the x N tempo (Driver 11).
-					{
-						const int multispeed_n = m_DriverInfo->GetAuxilaryDataCollection().GetMultiSpeed().GetMultiplier();
-						m_ExecutionHandler->SetMultiSpeedMultiplier(multispeed_n);
-
-						m_CPUMemory->Lock();
-						DriverUtils::RescaleTempoTable(*m_CPUMemory, *m_DriverInfo, 1, multispeed_n);
-						m_CPUMemory->Unlock();
-					}
+					// Restore the saved multispeed multiplier (the tempo table is loaded as-is).
+					m_ExecutionHandler->SetMultiSpeedMultiplier(m_DriverInfo->GetAuxilaryDataCollection().GetMultiSpeed().GetMultiplier());
 
 					// Give the first song a default name, if it hasn't one and is the only song in the loaded file
 					EditorUtils::UpdateSongNameOfSingleSongPackages(*m_DriverInfo);
@@ -778,14 +764,11 @@ namespace Editor
 	{
 		if (m_DriverInfo->IsValid())
 		{
-			const int multispeed_n = m_ExecutionHandler->GetMultiSpeedMultiplier();
-			m_DriverInfo->GetAuxilaryDataCollection().GetMultiSpeed().SetMultiplier(static_cast<unsigned char>(multispeed_n));
+			// Persist the current multispeed multiplier. The tempo table is saved as-is
+			// (exactly the value the user sees), so the round-trip is lossless.
+			m_DriverInfo->GetAuxilaryDataCollection().GetMultiSpeed().SetMultiplier(static_cast<unsigned char>(m_ExecutionHandler->GetMultiSpeedMultiplier()));
 
 			m_CPUMemory->Lock();
-
-			// Save the canonical (1x) tempo: un-scale the tempo table to base, capture the file
-			// data, then restore the live x N tempo so playback continues unaffected.
-			DriverUtils::RescaleTempoTable(*m_CPUMemory, *m_DriverInfo, multispeed_n, 1);
 
 			const unsigned short top_of_file_address = m_DriverInfo->GetTopAddress();
 			const unsigned short end_of_file_address = DriverUtils::GetEndOfMusicDataAddress(*m_DriverInfo, reinterpret_cast<const Emulation::IMemoryRandomReadAccess&>(*m_CPUMemory));
@@ -793,9 +776,6 @@ namespace Editor
 
 			unsigned char* data = new unsigned char[data_size];
 			m_CPUMemory->GetData(top_of_file_address, data, data_size);
-
-			DriverUtils::RescaleTempoTable(*m_CPUMemory, *m_DriverInfo, 1, multispeed_n);
-
 			m_CPUMemory->Unlock();
 			std::shared_ptr<Utility::C64File> file = Utility::C64File::CreateFromData(top_of_file_address, data, data_size);
 			delete[] data;
@@ -1011,15 +991,8 @@ namespace Editor
 				m_ExecutionHandler->SetStopVector(m_DriverInfo->GetDriverCommon().m_StopAddress);
 				m_ExecutionHandler->SetUpdateVector(m_DriverInfo->GetDriverCommon().m_UpdateAddress);
 
-				// Restore the saved multispeed and re-apply the x N tempo (Driver 11).
-				{
-					const int multispeed_n = m_DriverInfo->GetAuxilaryDataCollection().GetMultiSpeed().GetMultiplier();
-					m_ExecutionHandler->SetMultiSpeedMultiplier(multispeed_n);
-
-					m_CPUMemory->Lock();
-					DriverUtils::RescaleTempoTable(*m_CPUMemory, *m_DriverInfo, 1, multispeed_n);
-					m_CPUMemory->Unlock();
-				}
+				// Restore the saved multispeed multiplier (the tempo table is loaded as-is).
+				m_ExecutionHandler->SetMultiSpeedMultiplier(m_DriverInfo->GetAuxilaryDataCollection().GetMultiSpeed().GetMultiplier());
 
 				// Store name of last read file
 				SetLastSavedPathAndFilename(inPathAndFilename);
@@ -1047,19 +1020,8 @@ namespace Editor
 	{
 		const bool is_uppercase = m_DisplayState.IsHexUppercase();
 
-		// Export the canonical (1x) tempo: un-scale to base for packing, then restore the live x N.
-		const int multispeed_n = m_ExecutionHandler->GetMultiSpeedMultiplier();
-
-		m_CPUMemory->Lock();
-		DriverUtils::RescaleTempoTable(*m_CPUMemory, *m_DriverInfo, multispeed_n, 1);
-		m_CPUMemory->Unlock();
-
 		Packer packer(*m_CPUMemory, *m_DriverInfo, inDestinationAddress, inFirstZeroPage);
 		m_PackedData = packer.GetResult();
-
-		m_CPUMemory->Lock();
-		DriverUtils::RescaleTempoTable(*m_CPUMemory, *m_DriverInfo, 1, multispeed_n);
-		m_CPUMemory->Unlock();
 
 		std::string packing_info;
 		packing_info += "Range: 0x" + EditorUtils::ConvertToHexValue(static_cast<unsigned short>(m_PackedData->GetTopAddress()), is_uppercase) + " - 0x" + EditorUtils::ConvertToHexValue(static_cast<unsigned short>(m_PackedData->GetBottomAddress()), is_uppercase) + "\n";

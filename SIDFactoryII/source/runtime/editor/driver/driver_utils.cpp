@@ -269,57 +269,6 @@ namespace Editor
 		}
 
 
-		void RescaleTempoTable(Emulation::CPUMemory& inCPUMemory, const Editor::DriverInfo& inDriverInfo, int inOldMultiplier, int inNewMultiplier)
-		{
-			// Driver 11 only (major version 11; high bit flags a non-standard driver).
-			if ((inDriverInfo.GetDescriptor().m_DriverVersionMajor & 0x7f) != 11)
-				return;
-
-			const int old_n = inOldMultiplier < 1 ? 1 : inOldMultiplier;
-			const int new_n = inNewMultiplier < 1 ? 1 : inNewMultiplier;
-
-			if (old_n == new_n)
-				return;
-
-			const DriverInfo::TableDefinition* tempo_table = nullptr;
-			for (const auto& table_definition : inDriverInfo.GetTableDefinitions())
-			{
-				if (table_definition.m_Name == "Tempo")
-				{
-					tempo_table = &table_definition;
-					break;
-				}
-			}
-
-			if (tempo_table == nullptr)
-				return;
-
-			const int count = static_cast<int>(tempo_table->m_RowCount) * static_cast<int>(tempo_table->m_ColumnCount);
-			const unsigned short address = tempo_table->m_Address;
-
-			for (int i = 0; i < count; ++i)
-			{
-				const unsigned char current = inCPUMemory.GetByte(address + i);
-
-				// 0x7f is the tempo-program terminator and 0x80+ are markers - never touch them.
-				if (current >= 0x7f)
-					break;
-				if (current == 0x00)
-					continue;
-
-				int base = static_cast<int>(current) / old_n;
-				if (base < 1)
-					base = 1;
-
-				int scaled = base * new_n;
-				if (scaled > 0x7e)
-					scaled = 0x7e;
-
-				inCPUMemory.SetByte(address + i, static_cast<unsigned char>(scaled));
-			}
-		}
-
-
 		std::vector<unsigned short> GetOrderListsLength(const Editor::DriverInfo& inDriverInfo, const Emulation::IMemoryRandomReadAccess& inMemoryReader)
 		{
 			std::vector<unsigned short> order_list_length_list;
